@@ -19,6 +19,11 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: 'ZLon Partner | Salon Management',
   description: 'Manage your salon bookings, services, and staff with the ZLon Partner Portal.',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'ZLon Partner',
+  },
 };
 
 export default async function RootLayout({
