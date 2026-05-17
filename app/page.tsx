@@ -5,7 +5,8 @@ import {
   MoreHorizontal,
   Clock,
   User,
-  CheckCircle2
+  CheckCircle2,
+  ChevronRight
 } from 'lucide-react';
 
 const metrics = [
