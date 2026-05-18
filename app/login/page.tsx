@@ -1,7 +1,5 @@
 'use client';
 
-import "../globals.css";
-
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, Lock } from 'lucide-react';
