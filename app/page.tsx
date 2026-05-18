@@ -102,8 +102,8 @@ export default async function Page() {
   }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#F9F9F9] font-sans antialiased [font-family:var(--font-inter)]">
-      <aside className="flex h-full w-64 flex-none flex-col justify-between border-r border-gray-100 bg-white p-6">
+    <div className="min-h-screen w-screen bg-[#F9F9F9] flex flex-col md:flex-row overflow-y-auto md:overflow-hidden font-sans antialiased md:h-screen [font-family:var(--font-inter)]">
+      <aside className="hidden md:flex w-64 flex-none h-full bg-white border-r border-gray-100 p-6 flex-col justify-between">
         <div className="space-y-10">
           <div className="flex items-start gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-stone-100 text-sm font-semibold text-neutral-600">
@@ -161,28 +161,49 @@ export default async function Page() {
         </div>
       </aside>
 
-      <main className="h-full flex-1 overflow-y-auto p-10">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-gray-100 px-6 flex items-center justify-between z-50">
+        {navigationItems.map((item) => {
+          const Icon = item.icon;
+
+          return (
+            <button
+              key={item.label}
+              type="button"
+              className={
+                item.active
+                  ? 'flex flex-1 flex-col items-center justify-center text-[10px] font-semibold text-neutral-950 gap-1'
+                  : 'flex flex-1 flex-col items-center justify-center text-[10px] font-medium text-gray-400 gap-1'
+              }
+            >
+              <Icon className="h-5 w-5" />
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      <main className="flex-1 h-full overflow-y-auto p-4 sm:p-6 md:p-10 pb-24 md:pb-10">
         <div className="space-y-8">
-          <header className="flex items-start justify-between gap-6">
+          <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
             <div className="space-y-3">
-              <h2 className="text-[56px] font-bold leading-none tracking-tight text-neutral-950">
+              <h2 className="text-4xl font-bold leading-none tracking-tight text-neutral-950 sm:text-5xl md:text-[56px]">
                 Dashboard
               </h2>
-              <p className="text-lg text-gray-500">
+              <p className="text-base text-gray-500 md:text-lg">
                 Welcome back, Royal Barbers. Here&apos;s what&apos;s happening today.
               </p>
             </div>
 
             <button
               type="button"
-              className="mt-2 flex items-center gap-2 rounded-full bg-neutral-950 px-5 py-3 text-sm font-semibold text-white transition-transform hover:scale-[1.01]"
+              className="flex w-full items-center justify-center gap-2 rounded-full bg-neutral-950 px-5 py-3 text-sm font-semibold text-white transition-transform hover:scale-[1.01] sm:mt-2 sm:w-auto"
             >
               <Plus className="h-4 w-4" />
               <span>Add New Booking</span>
             </button>
           </header>
 
-          <section className="mb-8 grid grid-cols-3 gap-6">
+          <section className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 mb-8">
             {metricCards.map((card) => {
               const Icon = card.icon;
 
@@ -203,7 +224,7 @@ export default async function Page() {
                     )}
                   </div>
 
-                  <p className="text-[42px] font-bold leading-none tracking-tight text-neutral-950">
+                  <p className="text-3xl font-bold leading-none tracking-tight text-neutral-950 sm:text-[42px]">
                     {card.value}
                   </p>
                 </article>
@@ -211,9 +232,9 @@ export default async function Page() {
             })}
           </section>
 
-          <section className="grid grid-cols-3 items-start gap-8">
-            <article className="col-span-2 rounded-[32px] border border-gray-100 bg-white p-6 shadow-sm">
-              <div className="mb-6 flex items-center justify-between">
+          <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8 items-start">
+            <article className="rounded-[32px] border border-gray-100 bg-white p-5 shadow-sm sm:p-6 lg:col-span-2">
+              <div className="mb-6 flex items-center justify-between gap-4">
                 <h3 className="text-[18px] font-semibold tracking-tight text-neutral-950">
                   Today&apos;s Schedule
                 </h3>
@@ -229,7 +250,7 @@ export default async function Page() {
                 {scheduleItems.map((item) => (
                   <div
                     key={item.name}
-                    className="flex items-center justify-between gap-6 py-6 first:pt-0 last:pb-0"
+                    className="flex flex-col gap-4 py-6 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6"
                   >
                     <div className="flex min-w-0 items-center gap-4">
                       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gray-100 text-sm font-semibold text-gray-500">
@@ -237,24 +258,24 @@ export default async function Page() {
                       </div>
 
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-neutral-950">
+                        <p className="text-sm font-semibold text-neutral-950 sm:truncate">
                           {item.name}
                         </p>
-                        <p className="truncate text-base text-gray-500">
+                        <p className="text-base leading-6 text-gray-500 sm:truncate">
                           {item.service}
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex shrink-0 items-center gap-6">
-                      <div className="text-right">
-                        <div className="flex items-center justify-end gap-3 text-sm font-semibold text-neutral-950">
+                    <div className="flex shrink-0 flex-col items-start gap-3 sm:items-end">
+                      <div className="text-left sm:text-right">
+                        <div className="flex flex-wrap items-center gap-3 text-sm font-semibold text-neutral-950 sm:justify-end">
                           <span>{item.time}</span>
                           <span className="h-1 w-1 rounded-full bg-gray-300" />
                           <span>{item.amount}</span>
                         </div>
 
-                        <div className="mt-2 flex justify-end">
+                        <div className="mt-2 flex sm:justify-end">
                           <span
                             className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide ${item.statusClassName}`}
                           >
@@ -268,7 +289,7 @@ export default async function Page() {
               </div>
             </article>
 
-            <article className="rounded-[32px] border border-gray-100 bg-white p-6 shadow-sm">
+            <article className="rounded-[32px] border border-gray-100 bg-white p-5 shadow-sm sm:p-6">
               <h3 className="text-[18px] font-semibold tracking-tight text-neutral-950">
                 Performance
               </h3>
@@ -280,7 +301,7 @@ export default async function Page() {
                   ))}
                 </div>
 
-                <p className="text-[56px] font-bold leading-none tracking-tight text-neutral-950">
+                <p className="text-4xl font-bold leading-none tracking-tight text-neutral-950 sm:text-[56px]">
                   4.9
                 </p>
 
