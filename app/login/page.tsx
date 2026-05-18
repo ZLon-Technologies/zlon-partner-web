@@ -1,367 +1,189 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Lock } from 'lucide-react';
-
 import { createClient } from '@/utils/supabase/client';
-
-type AuthMode = 'password' | 'otp';
-type PendingAction = 'password' | 'otp-request' | 'otp-verify' | 'reset' | null;
+import { motion, AnimatePresence } from 'framer-motion';
+import { Loader2, Lock, ArrowRight, ArrowLeft } from 'lucide-react';
+import './globals.css';
 
 export default function LoginPage() {
-  const [authMode, setAuthMode] = useState<AuthMode>('password');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [otp, setOtp] = useState('');
-  const [otpRequested, setOtpRequested] = useState(false);
+  const [step, setStep] = useState<'email' | 'otp'>('email');
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const router = useRouter();
   const supabase = createClient();
 
-  function clearFeedback() {
-    setError(null);
-    setNotice(null);
-  }
-
-  function handleEmailChange(value: string) {
-    setEmail(value);
+  const handleSendOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
     setError(null);
 
-    if (otpRequested) {
-      setOtp('');
-      setOtpRequested(false);
-      setNotice(null);
-    }
-  }
-
-  async function handlePasswordSignIn(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setPendingAction('password');
-    clearFeedback();
-
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (signInError) {
-      setError(signInError.message);
-      setPendingAction(null);
-      return;
-    }
-
-    router.push('/');
-    router.refresh();
-  }
-
-  async function handleRequestOtp() {
-    clearFeedback();
-
-    if (!email) {
-      setError('Enter your email address first to request a one-time code.');
-      return;
-    }
-
-    setPendingAction('otp-request');
-
-    const { error: otpError } = await supabase.auth.signInWithOtp({
+    const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
         shouldCreateUser: false,
       },
     });
 
-    if (otpError) {
-      setError(otpError.message);
-      setPendingAction(null);
-      return;
+    if (error) {
+      setError(error.message);
+    } else {
+      setStep('otp');
     }
+    setLoading(false);
+  };
 
-    setOtp('');
-    setOtpRequested(true);
-    setNotice(`We sent a 6-digit code to ${email}.`);
-    setPendingAction(null);
-  }
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
 
-  async function handleVerifyOtp(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setPendingAction('otp-verify');
-    clearFeedback();
-
-    const { error: verifyError } = await supabase.auth.verifyOtp({
+    const { error } = await supabase.auth.verifyOtp({
       email,
       token: otp,
       type: 'email',
     });
 
-    if (verifyError) {
-      setError(verifyError.message);
-      setPendingAction(null);
-      return;
-    }
-
-    router.push('/');
-    router.refresh();
-  }
-
-  async function handleForgotPassword() {
-    clearFeedback();
-
-    if (!email) {
-      setError('Enter your email address first, then use Forgot? to request a reset link.');
-      return;
-    }
-
-    setPendingAction('reset');
-
-    const redirectTo =
-      typeof window !== 'undefined' ? `${window.location.origin}/login` : undefined;
-
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(
-      email,
-      redirectTo ? { redirectTo } : undefined
-    );
-
-    if (resetError) {
-      setError(resetError.message);
+    if (error) {
+      setError(error.message);
     } else {
-      setNotice('If this account exists, a password reset link has been sent to your email.');
+      router.push('/');
+      router.refresh();
     }
-
-    setPendingAction(null);
-  }
-
-  function switchToOtpMode() {
-    setAuthMode('otp');
-    setPassword('');
-    setOtp('');
-    setOtpRequested(false);
-    clearFeedback();
-  }
-
-  function switchToPasswordMode() {
-    setAuthMode('password');
-    setOtp('');
-    setOtpRequested(false);
-    clearFeedback();
-  }
-
-  const isBusy = pendingAction !== null;
+    setLoading(false);
+  };
 
   return (
-    <div className="relative min-h-screen w-screen bg-[#F9F9F9] flex flex-col items-center justify-center p-6 antialiased font-sans">
-      <div className="relative flex w-full max-w-[420px] flex-col items-center rounded-[2rem] border border-gray-100 bg-white px-8 py-10 text-center shadow-sm">
-        <div className="mb-6 text-neutral-950">
-          <Lock size={32} strokeWidth={2} />
-        </div>
-
-        <h1 className="text-2xl font-bold tracking-tight text-neutral-950">
-          ZLon Partner Portal
-        </h1>
-        <p className="mt-2 text-sm text-gray-500">
-          Secure access to your salon dashboard.
-        </p>
-
-        <div className="mt-8 flex w-full flex-col gap-4 text-left">
-          <div>
-            <label
-              htmlFor="email"
-              className="mb-1 block text-[11px] font-bold tracking-widest text-gray-500"
-            >
-              EMAIL ADDRESS
-            </label>
-            <input
-              id="email"
-              type="email"
-              required
-              autoComplete="username"
-              value={email}
-              onChange={(event) => handleEmailChange(event.target.value)}
-              placeholder="name@salon.com"
-              className="w-full rounded-xl border border-gray-200 bg-[#F9F9F9] px-4 py-3.5 text-sm text-neutral-950 placeholder-gray-400 transition-all focus:bg-white focus:outline-none focus:ring-2 focus:ring-neutral-950"
-            />
+    <div className="min-h-screen w-screen bg-[#F9F9F9] flex flex-col items-center justify-center p-6 antialiased font-sans">
+      <main className="flex-1 flex flex-col items-center justify-center w-full">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white px-8 py-10 rounded-[2rem] border border-gray-100 shadow-sm max-w-[420px] w-full flex flex-col items-center text-center"
+        >
+          <div className="w-12 h-12 bg-white flex items-center justify-center mb-8">
+            <Lock className="w-8 h-8 text-neutral-950" strokeWidth={2.5} />
           </div>
 
-          {authMode === 'password' ? (
-            <form onSubmit={handlePasswordSignIn} className="flex flex-col gap-4">
-              <div>
-                <div className="mb-1 flex items-center justify-between">
-                  <label
-                    htmlFor="password"
-                    className="block text-[11px] font-bold tracking-widest text-gray-500"
-                  >
-                    PASSWORD
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handleForgotPassword}
-                    disabled={isBusy}
-                    className="text-[11px] font-bold tracking-wide text-gray-500 transition-colors hover:text-neutral-950 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Forgot?
-                  </button>
-                </div>
-                <input
-                  id="password"
-                  type="password"
-                  required
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  placeholder="Enter your password"
-                  className="w-full rounded-xl border border-gray-200 bg-[#F9F9F9] px-4 py-3.5 text-sm text-neutral-950 placeholder-gray-400 transition-all focus:bg-white focus:outline-none focus:ring-2 focus:ring-neutral-950"
-                />
-              </div>
+          <h1 className="text-2xl font-bold text-neutral-950 tracking-tight mb-2">ZLon Partner Portal</h1>
+          <p className="text-sm text-gray-500 font-medium leading-relaxed mb-8">
+            Secure access to your salon dashboard.
+          </p>
 
-              {(error || notice) && (
-                <p
-                  className={`text-sm ${
-                    error ? 'text-red-500' : 'text-gray-500'
-                  }`}
-                >
-                  {error ?? notice}
-                </p>
-              )}
-
-              <button
-                type="submit"
-                disabled={isBusy}
-                className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-neutral-950 py-3.5 text-sm font-medium text-white shadow-sm transition-all duration-200 hover:opacity-90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
+          <AnimatePresence mode="wait">
+            {step === 'email' ? (
+              <motion.form
+                key="email-step"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 10 }}
+                onSubmit={handleSendOtp}
+                className="w-full space-y-6"
               >
-                {pendingAction === 'password' ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Signing In...</span>
-                  </>
-                ) : (
-                  'Sign In'
+                <div className="text-left">
+                  <label htmlFor="email" className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 mb-2 block px-1">
+                    Email Address
+                  </label>
+                  <input
+                    id="email"
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="name@salon.com"
+                    className="w-full px-5 py-4 bg-[#F9F9F9] border border-gray-200 rounded-2xl text-neutral-950 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-neutral-950/5 focus:border-neutral-950 transition-all duration-200"
+                  />
+                </div>
+
+                {error && (
+                  <p className="text-red-500 text-xs font-medium">{error}</p>
                 )}
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleVerifyOtp} className="flex flex-col gap-4">
-              {otpRequested ? (
-                <div>
-                  <label
-                    htmlFor="otp"
-                    className="mb-1 block text-[11px] font-bold tracking-widest text-gray-500"
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-neutral-950 text-white font-bold py-4 px-6 rounded-full hover:bg-neutral-800 active:scale-[0.98] transition-all duration-200 shadow-lg shadow-neutral-950/10 flex items-center justify-center gap-2 group"
+                >
+                  {loading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <>
+                      Send Login Code
+                      <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    </>
+                  )}
+                </button>
+              </motion.form>
+            ) : (
+              <motion.form
+                key="otp-step"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 10 }}
+                onSubmit={handleVerifyOtp}
+                className="w-full space-y-6"
+              >
+                <div className="text-left">
+                  <button 
+                    type="button" 
+                    onClick={() => setStep('email')}
+                    className="flex items-center gap-1.5 text-xs font-bold text-gray-400 hover:text-neutral-950 transition-colors mb-4"
                   >
-                    ONE-TIME CODE
+                    <ArrowLeft size={14} />
+                    Back to email
+                  </button>
+                  <label htmlFor="otp" className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 mb-2 block px-1">
+                    Verification Code
                   </label>
                   <input
                     id="otp"
                     type="text"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    maxLength={6}
                     required
+                    maxLength={6}
                     value={otp}
-                    onChange={(event) =>
-                      setOtp(event.target.value.replace(/\D/g, ''))
-                    }
-                    placeholder="Enter 6-digit code"
-                    className="w-full rounded-xl border border-gray-200 bg-[#F9F9F9] px-4 py-3.5 text-sm text-neutral-950 placeholder-gray-400 transition-all focus:bg-white focus:outline-none focus:ring-2 focus:ring-neutral-950"
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                    placeholder="000000"
+                    className="w-full px-5 py-4 bg-[#F9F9F9] border border-gray-200 rounded-2xl text-neutral-950 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-neutral-950/5 focus:border-neutral-950 transition-all duration-200 tracking-[0.5em] text-center text-lg font-bold"
                   />
                 </div>
-              ) : (
-                <p className="text-sm leading-6 text-gray-500">
-                  Request a one-time code if you prefer passwordless access for this session.
-                </p>
-              )}
 
-              {(error || notice) && (
-                <p
-                  className={`text-sm ${
-                    error ? 'text-red-500' : 'text-gray-500'
-                  }`}
-                >
-                  {error ?? notice}
-                </p>
-              )}
+                {error && (
+                  <p className="text-red-500 text-xs font-medium">{error}</p>
+                )}
 
-              {otpRequested ? (
                 <button
                   type="submit"
-                  disabled={isBusy}
-                  className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-neutral-950 py-3.5 text-sm font-medium text-white shadow-sm transition-all duration-200 hover:opacity-90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
+                  disabled={loading}
+                  className="w-full bg-neutral-950 text-white font-bold py-4 px-6 rounded-full hover:bg-neutral-800 active:scale-[0.98] transition-all duration-200 shadow-lg shadow-neutral-950/10 flex items-center justify-center gap-2 group"
                 >
-                  {pendingAction === 'otp-verify' ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Verifying...</span>
-                    </>
+                  {loading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
                   ) : (
-                    'Verify One-Time Code'
+                    <>
+                      Verify & Continue
+                      <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    </>
                   )}
                 </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleRequestOtp}
-                  disabled={isBusy}
-                  className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-neutral-950 py-3.5 text-sm font-medium text-white shadow-sm transition-all duration-200 hover:opacity-90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {pendingAction === 'otp-request' ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Sending Code...</span>
-                    </>
-                  ) : (
-                    'Send Login Code'
-                  )}
-                </button>
-              )}
-            </form>
-          )}
+              </motion.form>
+            )}
+          </AnimatePresence>
+        </motion.div>
+      </main>
 
-          {authMode === 'password' ? (
-            <div className="mt-2 border-t border-gray-100 pt-4 text-center">
-              <button
-                type="button"
-                onClick={switchToOtpMode}
-                disabled={isBusy}
-                className="mt-4 cursor-pointer text-sm font-medium text-neutral-950 transition-all hover:underline disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Login with one-time code (OTP)
-              </button>
-            </div>
-          ) : (
-            <div className="mt-2 flex items-center justify-between gap-4 border-t border-gray-100 pt-4">
-              <button
-                type="button"
-                onClick={switchToPasswordMode}
-                disabled={isBusy}
-                className="text-sm font-medium text-neutral-950 transition-all hover:underline disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Use email and password instead
-              </button>
-
-              {otpRequested && (
-                <button
-                  type="button"
-                  onClick={handleRequestOtp}
-                  disabled={isBusy}
-                  className="text-sm font-medium text-gray-500 transition-colors hover:text-neutral-950 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  Resend code
-                </button>
-              )}
-            </div>
-          )}
+      <footer className="w-full py-8 flex flex-col items-center gap-3">
+        <div className="flex items-center gap-4 text-sm font-medium text-gray-500">
+          <button className="hover:text-neutral-950 transition-colors">Privacy Policy</button>
+          <span className="text-gray-300">•</span>
+          <button className="hover:text-neutral-950 transition-colors">Terms of Service</button>
         </div>
-      </div>
-
-      <div className="absolute bottom-8 flex flex-col items-center gap-2 text-xs text-gray-500">
-        <div className="flex items-center gap-3">
-          <span>Privacy Policy</span>
-          <span>&bull;</span>
-          <span>Terms of Service</span>
-        </div>
-        <div>&copy; 2026 ZLon Technologies. All rights reserved.</div>
-      </div>
+        <p className="text-sm font-medium text-gray-400">
+          &copy; 2026 ZLon Technologies. All rights reserved.
+        </p>
+      </footer>
     </div>
   );
 }
