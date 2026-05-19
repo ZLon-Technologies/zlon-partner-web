@@ -36,15 +36,17 @@ export async function proxy(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
-  const isLoginRoute = request.nextUrl.pathname.startsWith('/login')
-  const isAuthCallback = request.nextUrl.pathname.startsWith('/auth/callback')
   
-  if (!user && !isLoginRoute && !isAuthCallback) {
+  const path = request.nextUrl.pathname
+  const isPublicRoute = path === '/' || path.startsWith('/login') || path.startsWith('/apply') || path.startsWith('/forgot-password') || path.startsWith('/auth/callback')
+  const isDashboardRoute = path.startsWith('/dashboard') || path === '/'
+  
+  if (!user && !isPublicRoute) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  if (user && isLoginRoute) {
-    return NextResponse.redirect(new URL('/', request.url))
+  if (user && (path.startsWith('/login') || path === '/')) {
+    return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
   return response
