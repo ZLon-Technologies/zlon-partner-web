@@ -128,7 +128,7 @@ function LoginContent() {
     setLoading('verify');
     clearFeedback();
 
-    const { error: verifyError } = await supabase.auth.verifyOtp({
+    const { data: authData, error: verifyError } = await supabase.auth.verifyOtp({
       email,
       token: otp,
       type: 'email',
@@ -138,6 +138,21 @@ function LoginContent() {
       setError(verifyError.message);
       setLoading(null);
       return;
+    }
+
+    if (authData.user) {
+      const { data: salonData, error: salonError } = await supabase
+        .from('salons')
+        .select('id')
+        .eq('owner_id', authData.user.id)
+        .single();
+
+      if (salonError || !salonData) {
+        await supabase.auth.signOut();
+        setError('Access Denied. This portal is strictly for registered ZLon Salon Partners.');
+        setLoading(null);
+        return;
+      }
     }
 
     router.push('/dashboard');
