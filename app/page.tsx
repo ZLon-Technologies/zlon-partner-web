@@ -1,5 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Calendar, TrendingUp, Sparkles, ArrowRight } from 'lucide-react';
 
 export default function LandingPage() {
@@ -7,10 +8,14 @@ export default function LandingPage() {
     <div className="min-h-screen w-full bg-[#F9F9F9] font-sans antialiased text-neutral-950 flex flex-col">
       {/* Top Navigation Bar */}
       <header className="w-full px-6 py-4 flex justify-between items-center bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-50">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center text-white shrink-0">
-            <span className="text-lg font-bold">Z.</span>
-          </div>
+        <div className="flex items-center gap-3">
+          <Image 
+            src="/logo.png" 
+            alt="ZLon Logo" 
+            width={40} 
+            height={40} 
+            className="rounded-xl shadow-sm"
+          />
           <span className="font-bold tracking-tight text-lg">ZLon Partner</span>
         </div>
         <div className="flex items-center gap-6">

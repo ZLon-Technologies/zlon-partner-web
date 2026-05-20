@@ -1,6 +1,7 @@
 import { createClient } from '@/utils/supabase/server';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { 
   LayoutDashboard, 
   Calendar, 
@@ -39,9 +40,16 @@ export default async function DashboardLayout({
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex w-64 flex-none bg-white border-r border-gray-100 flex-col justify-between p-6 z-40">
         <div className="flex flex-col gap-8">
-          {/* Replace the old logo block with this exact code */}
-          <div className="flex items-center gap-2 mb-8">
-            <div className="text-2xl font-extrabold text-neutral-950 tracking-tighter">
+          {/* Authentic Logo Branding */}
+          <div className="flex items-center gap-3 mb-8">
+            <Image 
+              src="/logo.png" 
+              alt="ZLon Logo" 
+              width={40} 
+              height={40} 
+              className="rounded-xl shadow-sm"
+            />
+            <div className="text-xl font-extrabold text-neutral-950 tracking-tighter">
               ZLon<span className="text-gray-400 font-medium ml-1">Partner</span>
             </div>
           </div>
