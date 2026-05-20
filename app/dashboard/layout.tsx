@@ -1,5 +1,4 @@
 import { createClient } from '@/utils/supabase/server';
-import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { 
@@ -19,21 +18,8 @@ export default async function DashboardLayout({
 }) {
   const supabase = await createClient();
 
-  // 1. Authentication & RBAC Bouncer
+  // Fetch user session for UI display only (Route protection is handled by proxy.ts)
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    redirect('/login');
-  }
-
-  const { data: salon, error: salonError } = await supabase
-    .from('salons')
-    .select('id')
-    .eq('owner_id', user.id)
-    .single();
-
-  if (salonError || !salon) {
-    redirect('/login?error=unauthorized_role');
-  }
 
   return (
     <div className="flex h-screen w-screen bg-[#F9F9F9] overflow-hidden antialiased font-sans">
@@ -102,7 +88,7 @@ export default async function DashboardLayout({
             </div>
             <div className="min-w-0">
               <p className="text-[10px] font-bold text-neutral-950 truncate uppercase tracking-tight">Active Partner</p>
-              <p className="text-[9px] text-gray-400 font-medium truncate">{user.email}</p>
+              <p className="text-[9px] text-gray-400 font-medium truncate">{user?.email || 'Guest'}</p>
             </div>
           </div>
           
