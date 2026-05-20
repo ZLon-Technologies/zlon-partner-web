@@ -39,9 +39,9 @@ export default async function DashboardLayout({
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex w-64 flex-none bg-white border-r border-gray-100 flex-col justify-between p-6 z-40">
         <div className="flex flex-col gap-8">
-          {/* Branding Block */}
-          <div className="px-2">
-            <div className="text-xl font-extrabold text-neutral-950 tracking-tighter">
+          {/* Replace the old logo block with this exact code */}
+          <div className="flex items-center gap-2 mb-8">
+            <div className="text-2xl font-extrabold text-neutral-950 tracking-tighter">
               ZLon<span className="text-gray-400 font-medium ml-1">Partner</span>
             </div>
           </div>

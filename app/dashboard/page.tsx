@@ -174,7 +174,7 @@ export default async function Dashboard() {
         {/* Sidebar Insights/Stats */}
         <div className="space-y-8">
           <div className="flex items-center gap-2 px-2">
-            <TrendingUp size={20} className="text-neutral-950" />
+            <TrendingUp className="w-5 h-5 text-neutral-950" strokeWidth={2} />
             <h2 className="text-xl font-bold tracking-tight text-neutral-950">Salon Performance</h2>
           </div>
           
