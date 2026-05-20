@@ -55,38 +55,38 @@ export default async function DashboardLayout({
           </div>
 
           {/* Desktop Nav Links */}
-          <nav className="flex flex-col gap-1">
+          <nav className="flex flex-col gap-2">
             <Link 
               href="/dashboard" 
-              className="flex items-center gap-3 px-3 py-3 bg-neutral-950 text-white rounded-xl font-semibold text-sm transition-all shadow-md shadow-black/5"
+              className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white text-neutral-950 shadow-sm font-medium transition-all"
             >
               <LayoutDashboard size={20} />
               <span>Dashboard</span>
             </Link>
             <Link 
-              href="/bookings" 
-              className="flex items-center gap-3 px-3 py-3 text-gray-500 hover:text-neutral-950 hover:bg-gray-50 rounded-xl font-semibold text-sm transition-all"
+              href="/dashboard/bookings" 
+              className="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-500 hover:bg-white hover:text-neutral-950 hover:shadow-sm font-medium transition-all"
             >
               <Calendar size={20} />
               <span>Bookings</span>
             </Link>
             <Link 
-              href="/services" 
-              className="flex items-center gap-3 px-3 py-3 text-gray-500 hover:text-neutral-950 hover:bg-gray-50 rounded-xl font-semibold text-sm transition-all"
+              href="/dashboard/services" 
+              className="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-500 hover:bg-white hover:text-neutral-950 hover:shadow-sm font-medium transition-all"
             >
               <Scissors size={20} />
               <span>Services</span>
             </Link>
             <Link 
-              href="/staff" 
-              className="flex items-center gap-3 px-3 py-3 text-gray-500 hover:text-neutral-950 hover:bg-gray-50 rounded-xl font-semibold text-sm transition-all"
+              href="/dashboard/staff" 
+              className="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-500 hover:bg-white hover:text-neutral-950 hover:shadow-sm font-medium transition-all"
             >
               <Users size={20} />
               <span>Staff</span>
             </Link>
             <Link 
-              href="/settings" 
-              className="flex items-center gap-3 px-3 py-3 text-gray-500 hover:text-neutral-950 hover:bg-gray-50 rounded-xl font-semibold text-sm transition-all"
+              href="/dashboard/settings" 
+              className="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-500 hover:bg-white hover:text-neutral-950 hover:shadow-sm font-medium transition-all"
             >
               <Settings size={20} />
               <span>Settings</span>
@@ -117,22 +117,24 @@ export default async function DashboardLayout({
       </aside>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white/80 backdrop-blur-xl border-t border-gray-100 px-6 flex items-center justify-between z-50">
-        <Link href="/dashboard" className="p-2 text-neutral-950">
-          <LayoutDashboard size={24} strokeWidth={2.5} />
-        </Link>
-        <Link href="/bookings" className="p-2 text-gray-400 hover:text-neutral-950">
-          <Calendar size={24} />
-        </Link>
-        <Link href="/services" className="p-2 text-gray-400 hover:text-neutral-950">
-          <Scissors size={24} />
-        </Link>
-        <Link href="/staff" className="p-2 text-gray-400 hover:text-neutral-950">
-          <Users size={24} />
-        </Link>
-        <Link href="/settings" className="p-2 text-gray-400 hover:text-neutral-950">
-          <Settings size={24} />
-        </Link>
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-gray-100 z-50">
+        <div className="flex items-center justify-around w-full h-full">
+          <Link href="/dashboard" className="text-gray-500 hover:text-neutral-950 p-2">
+            <LayoutDashboard size={24} />
+          </Link>
+          <Link href="/dashboard/bookings" className="text-gray-500 hover:text-neutral-950 p-2">
+            <Calendar size={24} />
+          </Link>
+          <Link href="/dashboard/services" className="text-gray-500 hover:text-neutral-950 p-2">
+            <Scissors size={24} />
+          </Link>
+          <Link href="/dashboard/staff" className="text-gray-500 hover:text-neutral-950 p-2">
+            <Users size={24} />
+          </Link>
+          <Link href="/dashboard/settings" className="text-gray-500 hover:text-neutral-950 p-2">
+            <Settings size={24} />
+          </Link>
+        </div>
       </nav>
 
       {/* Main Content Wrapper */}
