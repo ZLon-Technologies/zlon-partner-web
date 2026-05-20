@@ -173,7 +173,10 @@ export default async function Dashboard() {
 
         {/* Sidebar Insights/Stats */}
         <div className="space-y-8">
-          <h2 className="text-xl font-bold tracking-tight px-2 text-neutral-950">Salon Performance</h2>
+          <div className="flex items-center gap-2 px-2">
+            <TrendingUp size={20} className="text-neutral-950" />
+            <h2 className="text-xl font-bold tracking-tight text-neutral-950">Salon Performance</h2>
+          </div>
           
           <div className="bg-neutral-950 text-white rounded-[2.5rem] p-8 shadow-xl shadow-black/10 relative overflow-hidden group">
             <div className="absolute top-[-10%] right-[-10%] w-40 h-40 bg-white/5 rounded-full blur-2xl group-hover:scale-125 transition-transform duration-700" />

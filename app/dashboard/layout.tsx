@@ -39,14 +39,10 @@ export default async function DashboardLayout({
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex w-64 flex-none bg-white border-r border-gray-100 flex-col justify-between p-6 z-40">
         <div className="flex flex-col gap-8">
-          {/* Logo & User Block */}
-          <div className="flex items-center gap-3 px-2">
-            <div className="w-10 h-10 bg-neutral-950 rounded-xl flex items-center justify-center text-white shrink-0 shadow-lg shadow-black/10">
-              <span className="text-xl font-bold italic tracking-tighter italic">Z.</span>
-            </div>
-            <div className="min-w-0">
-              <h2 className="text-sm font-bold text-neutral-950 truncate">ZLon Partner</h2>
-              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Premium Dashboard</p>
+          {/* Branding Block */}
+          <div className="px-2">
+            <div className="text-xl font-extrabold text-neutral-950 tracking-tighter">
+              ZLon<span className="text-gray-400 font-medium ml-1">Partner</span>
             </div>
           </div>
 
