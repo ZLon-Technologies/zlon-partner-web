@@ -95,7 +95,7 @@ export default function LandingPage() {
             {/* Feature 3 */}
             <div className="flex flex-col items-center md:items-start text-center md:text-left group">
               <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center mb-6 text-neutral-950 group-hover:bg-neutral-950 group-hover:text-white transition-all duration-300">
-                <Sparkles size={28} />
+                <Cpu size={28} />
               </div>
               <h3 className="text-xl font-bold text-neutral-950 mb-3 tracking-tight">AI-Powered Operations</h3>
               <p className="text-gray-500 font-medium leading-relaxed">
