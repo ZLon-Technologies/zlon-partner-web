@@ -1,7 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Calendar, TrendingUp, Sparkles, ArrowRight } from 'lucide-react';
+import { Calendar, TrendingUp, Cpu, ArrowRight } from 'lucide-react';
 
 export default function LandingPage() {
   return (
