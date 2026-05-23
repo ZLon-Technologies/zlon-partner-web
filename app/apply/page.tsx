@@ -27,13 +27,15 @@ export default function ApplyPage() {
 
     try {
       console.log("PAYLOAD BEING SENT:", formData);
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('salon_applications')
         .insert([formData]);
 
       if (error) {
-        console.error("REAL DB ERROR:", error);
-        throw new Error(error.message);
+        console.error("SUPABASE REJECTION:", error);
+        setError(error.message);
+        setLoading(false);
+        return; // CRITICAL: Stop execution here so it doesn't show success
       }
       
       setIsSubmitted(true);
