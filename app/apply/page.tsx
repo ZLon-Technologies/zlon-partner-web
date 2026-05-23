@@ -27,18 +27,18 @@ export default function ApplyPage() {
 
     try {
       console.log("PAYLOAD BEING SENT:", formData);
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('salon_applications')
         .insert([formData]);
 
       if (error) {
-        console.error("SUPABASE SUBMIT ERROR:", error);
-        setError(error.message);
-      } else {
-        setIsSubmitted(true);
+        console.error("REAL DB ERROR:", error);
+        throw new Error(error.message);
       }
+      
+      setIsSubmitted(true);
     } catch (err: any) {
-      console.error("SUPABASE SUBMIT ERROR:", err);
+      console.error("SUBMIT ERROR:", err);
       setError(err.message || "An unexpected error occurred");
     } finally {
       setLoading(false);
