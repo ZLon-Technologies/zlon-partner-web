@@ -25,16 +25,24 @@ export default function ApplyPage() {
     setLoading(true);
     setError(null);
 
-    const { error } = await supabase
-      .from('salon_applications')
-      .insert([formData]);
+    try {
+      console.log("PAYLOAD BEING SENT:", formData);
+      const { error } = await supabase
+        .from('salon_applications')
+        .insert([formData]);
 
-    if (error) {
-      setError(error.message);
-    } else {
-      setIsSubmitted(true);
+      if (error) {
+        console.error("SUPABASE SUBMIT ERROR:", error);
+        setError(error.message);
+      } else {
+        setIsSubmitted(true);
+      }
+    } catch (err: any) {
+      console.error("SUPABASE SUBMIT ERROR:", err);
+      setError(err.message || "An unexpected error occurred");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
