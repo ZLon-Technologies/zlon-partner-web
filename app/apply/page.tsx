@@ -12,7 +12,10 @@ export default function ApplyPage() {
     owner_name: '',
     email: '',
     phone: '',
+    address: '',
     city: '',
+    state: '',
+    pincode: '',
   });
   const [loading, setLoading] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -147,16 +150,60 @@ export default function ApplyPage() {
 
                 <div className="text-left">
                   <label className="text-[10px] font-bold tracking-widest text-gray-500 mb-1.5 block px-1 uppercase">
-                    City
+                    Street Address
                   </label>
                   <input
                     required
-                    name="city"
-                    value={formData.city}
+                    name="address"
+                    value={formData.address}
                     onChange={handleChange}
-                    placeholder="e.g. Jabalpur"
+                    placeholder="e.g. 123 Main St, Complex Area"
                     className="w-full px-4 py-3.5 bg-[#F9F9F9] border border-gray-200 rounded-xl text-sm text-neutral-950 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-neutral-950/5 focus:border-neutral-950 transition-all"
                   />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="text-left">
+                    <label className="text-[10px] font-bold tracking-widest text-gray-500 mb-1.5 block px-1 uppercase">
+                      City
+                    </label>
+                    <input
+                      required
+                      name="city"
+                      value={formData.city}
+                      onChange={handleChange}
+                      placeholder="e.g. Jabalpur"
+                      className="w-full px-4 py-3.5 bg-[#F9F9F9] border border-gray-200 rounded-xl text-sm text-neutral-950 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-neutral-950/5 focus:border-neutral-950 transition-all"
+                    />
+                  </div>
+
+                  <div className="text-left">
+                    <label className="text-[10px] font-bold tracking-widest text-gray-500 mb-1.5 block px-1 uppercase">
+                      State
+                    </label>
+                    <input
+                      required
+                      name="state"
+                      value={formData.state}
+                      onChange={handleChange}
+                      placeholder="e.g. MP"
+                      className="w-full px-4 py-3.5 bg-[#F9F9F9] border border-gray-200 rounded-xl text-sm text-neutral-950 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-neutral-950/5 focus:border-neutral-950 transition-all"
+                    />
+                  </div>
+
+                  <div className="text-left">
+                    <label className="text-[10px] font-bold tracking-widest text-gray-500 mb-1.5 block px-1 uppercase">
+                      Pincode
+                    </label>
+                    <input
+                      required
+                      name="pincode"
+                      value={formData.pincode}
+                      onChange={handleChange}
+                      placeholder="e.g. 482001"
+                      className="w-full px-4 py-3.5 bg-[#F9F9F9] border border-gray-200 rounded-xl text-sm text-neutral-950 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-neutral-950/5 focus:border-neutral-950 transition-all"
+                    />
+                  </div>
                 </div>
 
                 {error && (
