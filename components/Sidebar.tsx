@@ -24,10 +24,10 @@ function cn(...inputs: ClassValue[]) {
 
 const navItems = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Bookings', href: '/bookings', icon: CalendarDays },
-  { name: 'Services', href: '/services', icon: Scissors },
-  { name: 'Staff', href: '/staff', icon: Users },
-  { name: 'Settings', href: '/settings', icon: Settings },
+  { name: 'Bookings', href: '/dashboard/bookings', icon: CalendarDays },
+  { name: 'Services', href: '/dashboard/services', icon: Scissors },
+  { name: 'Staff', href: '/dashboard/staff', icon: Users },
+  { name: 'Settings', href: '/dashboard/settings', icon: Settings },
 ];
 
 export function Sidebar({ user }: { user?: User }) {

@@ -1,14 +1,14 @@
 {
-  "name": "ZLon - Salon Booking",
-  "short_name": "ZLon",
-  "description": "Book premium salon services instantly.",
-  "start_url": "/",
+  "name": "ZLon Partner Portal",
+  "short_name": "ZLon Partner",
+  "description": "Manage your salon bookings and performance on ZLon.",
+  "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#000000",
+  "theme_color": "#09090b",
   "icons": [
     {
-      "src": "/icon.png",
+      "src": "/apple-icon.png",
       "sizes": "512x512",
       "type": "image/png"
     }
