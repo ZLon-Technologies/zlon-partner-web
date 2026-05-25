@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/server';
 import { format } from 'date-fns';
+import Link from 'next/link';
 
 export default async function Dashboard() {
   const supabase = await createClient();
@@ -57,10 +58,10 @@ export default async function Dashboard() {
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
             <span className="text-[10px] font-bold uppercase tracking-wider text-gray-600">Salon Online</span>
           </div>
-          <button className="bg-neutral-950 text-white px-6 py-2.5 rounded-full text-sm font-bold shadow-lg shadow-black/10 transition-all hover:opacity-90 active:scale-95 flex items-center gap-2">
+          <Link href="/dashboard/bookings" className="bg-neutral-950 text-white px-6 py-2.5 rounded-full text-sm font-bold shadow-lg shadow-black/10 transition-all hover:opacity-90 active:scale-95 flex items-center gap-2">
             <Plus size={16} />
             Add New Booking
-          </button>
+          </Link>
         </div>
       </header>
 
@@ -105,9 +106,9 @@ export default async function Dashboard() {
         <div className="lg:col-span-2 space-y-6">
           <div className="flex items-center justify-between px-2">
             <h2 className="text-xl font-bold tracking-tight text-neutral-950">Today's Schedule</h2>
-            <button className="text-xs font-bold text-gray-400 hover:text-neutral-950 transition-colors flex items-center gap-1.5 uppercase tracking-wider">
+            <Link href="/dashboard/bookings" className="text-xs font-bold text-gray-400 hover:text-neutral-950 transition-colors flex items-center gap-1.5 uppercase tracking-wider">
               View Calendar <MoreHorizontal size={16} />
-            </button>
+            </Link>
           </div>
 
           <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50">
@@ -191,9 +192,9 @@ export default async function Dashboard() {
               <p className="text-sm font-medium text-white/50 mt-4 leading-relaxed">
                 You are in the top 1% of salons in your area. Keep up the great work!
               </p>
-              <button className="mt-8 w-full py-4 bg-white text-black rounded-2xl font-bold text-sm hover:bg-gray-100 transition-all active:scale-95 shadow-lg shadow-white/5">
+              <Link href="/dashboard/reviews" className="mt-8 w-full py-4 bg-white text-black rounded-2xl font-bold text-sm hover:bg-gray-100 transition-all active:scale-95 shadow-lg shadow-white/5 block text-center">
                 View Reviews
-              </button>
+              </Link>
             </div>
           </div>
 
