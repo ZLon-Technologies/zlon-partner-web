@@ -45,12 +45,8 @@ export function Sidebar({ user }: { user?: User }) {
     <aside className="w-64 h-full bg-white border-r border-gray-100 flex flex-col shrink-0">
       <div className="p-6">
         <div className="flex items-center gap-3 px-2">
-          <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center text-white shrink-0">
-            <span className="text-xl font-bold">Z.</span>
-          </div>
-          <div>
-            <h2 className="text-sm font-bold tracking-tight">ZLon Partner</h2>
-            <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Salon Portal</p>
+          <div className="flex items-center justify-center shrink-0">
+            <img src="/zlon-partner-logo.png" alt="ZLon Partner Logo" className="h-8 w-auto object-contain" />
           </div>
         </div>
       </div>

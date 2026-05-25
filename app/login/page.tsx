@@ -163,12 +163,12 @@ function LoginContent() {
 
   return (
     <div className="bg-white px-8 py-10 rounded-[2rem] border border-gray-100 shadow-sm max-w-[420px] w-full flex flex-col items-center text-center relative">
-      <div className="mb-6 text-neutral-950">
-        <Lock size={32} strokeWidth={2} />
+      <div className="mb-8 flex justify-center w-full">
+        <img src="/zlon-partner-logo.png" alt="ZLon Partner Logo" className="h-10 w-auto object-contain" />
       </div>
 
       <h1 className="text-2xl font-bold text-neutral-950 tracking-tight">
-        ZLon Partner Portal
+        Partner Portal
       </h1>
       <p className="text-sm text-gray-500 mt-2 mb-8">
         Secure access to your salon dashboard.
