@@ -1,7 +1,88 @@
-import React from 'react';
-import { Settings, User, Clock, Bell } from 'lucide-react';
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { Settings, User, Clock, Bell, Loader2, CheckCircle2 } from 'lucide-react';
+import { createClient } from '@/utils/supabase/client';
 
 export default function SettingsPage() {
+  const supabase = createClient();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [salonId, setSalonId] = useState<number | null>(null);
+  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+
+  const [salonData, setSalonData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    address: '',
+    city: '',
+    state: '',
+    pincode: '',
+  });
+
+  useEffect(() => {
+    async function fetchSalonData() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('salons')
+        .select('*')
+        .eq('owner_id', user.id)
+        .single();
+
+      if (data) {
+        setSalonId(data.id);
+        setSalonData({
+          name: data.name || '',
+          email: data.email || '',
+          phone: data.phone || '',
+          address: data.address || '',
+          city: data.city || '',
+          state: data.state || '',
+          pincode: data.pincode || '',
+        });
+      }
+      setLoading(false);
+    }
+    fetchSalonData();
+  }, [supabase]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSalonData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const handleUpdate = async () => {
+    if (!salonId) return;
+    setSaving(true);
+    setMessage(null);
+
+    const { error } = await supabase
+      .from('salons')
+      .update({
+        name: salonData.name,
+        email: salonData.email,
+        phone: salonData.phone,
+        address: salonData.address,
+        city: salonData.city,
+        state: salonData.state,
+        pincode: salonData.pincode,
+      })
+      .eq('id', salonId);
+
+    if (error) {
+      setMessage({ type: 'error', text: error.message });
+    } else {
+      setMessage({ type: 'success', text: 'Salon profile updated successfully.' });
+      setTimeout(() => setMessage(null), 3000);
+    }
+    setSaving(false);
+  };
+
   return (
     <div className="space-y-8 pb-12">
       <div>
@@ -11,27 +92,83 @@ export default function SettingsPage() {
 
       <div className="grid grid-cols-1 gap-8">
         {/* Salon Profile */}
-        <section className="bg-white border border-gray-100 rounded-3xl p-8">
-          <div className="flex items-center gap-2 mb-6">
-            <User size={20} className="text-neutral-950" />
-            <h2 className="text-lg font-bold text-neutral-950">Salon Profile</h2>
+        <section className="bg-white border border-gray-100 rounded-3xl p-8 shadow-sm">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2">
+              <User size={20} className="text-neutral-950" />
+              <h2 className="text-lg font-bold text-neutral-950">Salon Profile</h2>
+            </div>
+            {message && (
+              <span className={`text-xs font-bold px-3 py-1.5 rounded-lg ${message.type === 'success' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'} flex items-center gap-1.5 animate-in fade-in zoom-in-95`}>
+                {message.type === 'success' && <CheckCircle2 size={14} />}
+                {message.text}
+              </span>
+            )}
           </div>
-          <div className="space-y-6 max-w-2xl">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block ml-1">Salon Name</label>
-                <input className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-neutral-950/5 transition-all" defaultValue="ZLon Premium Salon" />
+
+          {loading ? (
+            <div className="py-12 flex flex-col items-center justify-center text-gray-400">
+              <Loader2 className="animate-spin mb-2" size={32} />
+              <p className="text-xs font-bold tracking-widest uppercase">Loading Profile...</p>
+            </div>
+          ) : (
+            <div className="space-y-6 max-w-2xl">
+              {/* Row 1 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block ml-1">Salon Name</label>
+                  <input name="name" value={salonData.name} onChange={handleChange} className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm font-medium text-neutral-950 focus:outline-none focus:ring-2 focus:ring-neutral-950/5 focus:bg-white transition-all" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block ml-1">Primary Email</label>
+                  <input name="email" value={salonData.email} onChange={handleChange} className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm font-medium text-neutral-950 focus:outline-none focus:ring-2 focus:ring-neutral-950/5 focus:bg-white transition-all" />
+                </div>
               </div>
+              
+              {/* Row 2 */}
               <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block ml-1">Primary Email</label>
-                <input className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-neutral-950/5 transition-all" defaultValue="partner@zlon.com" />
+                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block ml-1">Phone Number</label>
+                <input name="phone" value={salonData.phone} onChange={handleChange} className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm font-medium text-neutral-950 focus:outline-none focus:ring-2 focus:ring-neutral-950/5 focus:bg-white transition-all" />
+              </div>
+
+              {/* Row 3 */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block ml-1">Street Address</label>
+                <input name="address" value={salonData.address} onChange={handleChange} className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm font-medium text-neutral-950 focus:outline-none focus:ring-2 focus:ring-neutral-950/5 focus:bg-white transition-all" />
+              </div>
+
+              {/* Row 4 */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block ml-1">City</label>
+                  <input name="city" value={salonData.city} onChange={handleChange} className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm font-medium text-neutral-950 focus:outline-none focus:ring-2 focus:ring-neutral-950/5 focus:bg-white transition-all" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block ml-1">State</label>
+                  <input name="state" value={salonData.state} onChange={handleChange} className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm font-medium text-neutral-950 focus:outline-none focus:ring-2 focus:ring-neutral-950/5 focus:bg-white transition-all" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 block ml-1">Pincode</label>
+                  <input name="pincode" value={salonData.pincode} onChange={handleChange} className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm font-medium text-neutral-950 focus:outline-none focus:ring-2 focus:ring-neutral-950/5 focus:bg-white transition-all" />
+                </div>
+              </div>
+
+              <div className="pt-8 border-t border-gray-100 flex justify-end">
+                <button 
+                  onClick={handleUpdate}
+                  disabled={saving || !salonId}
+                  className="bg-neutral-950 text-white px-10 py-3.5 rounded-xl text-sm font-bold shadow-lg shadow-black/10 hover:bg-neutral-800 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {saving && <Loader2 size={16} className="animate-spin" />}
+                  Save Changes
+                </button>
               </div>
             </div>
-          </div>
+          )}
         </section>
 
         {/* Operating Hours */}
-        <section className="bg-white border border-gray-100 rounded-3xl p-8">
+        <section className="bg-white border border-gray-100 rounded-3xl p-8 shadow-sm">
           <div className="flex items-center gap-2 mb-6">
             <Clock size={20} className="text-neutral-950" />
             <h2 className="text-lg font-bold text-neutral-950">Operating Hours</h2>
@@ -48,7 +185,7 @@ export default function SettingsPage() {
         </section>
 
         {/* Notification Preferences */}
-        <section className="bg-white border border-gray-100 rounded-3xl p-8">
+        <section className="bg-white border border-gray-100 rounded-3xl p-8 shadow-sm">
           <div className="flex items-center gap-2 mb-6">
             <Bell size={20} className="text-neutral-950" />
             <h2 className="text-lg font-bold text-neutral-950">Notification Preferences</h2>
