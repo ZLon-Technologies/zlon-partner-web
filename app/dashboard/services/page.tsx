@@ -129,7 +129,6 @@ export default function ServicesPage() {
         </div>
         <button 
           onClick={() => setIsModalOpen(true)}
-          disabled={!salonId}
           className="bg-neutral-950 text-white px-6 py-2.5 rounded-full text-sm font-bold shadow-lg shadow-black/10 transition-all hover:opacity-90 active:scale-95 flex items-center gap-2 justify-center sm:justify-start disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Plus size={16} />
