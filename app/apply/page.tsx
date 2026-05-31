@@ -8,6 +8,7 @@ import { CheckCircle2, Loader2, ArrowRight, ArrowLeft, ShieldCheck, Check, Plus 
 import { motion, AnimatePresence } from 'framer-motion';
 import { auth } from '@/lib/firebase';
 import { RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from 'firebase/auth';
+import Autocomplete from "react-google-autocomplete";
 
 const CATEGORIES = ['Hair Salon', 'Barbershop', 'Nail Studio', 'Med Spa'];
 
@@ -38,11 +39,14 @@ const DEFAULT_SERVICES: Record<string, any[]> = {
   ]
 };
 
+const generateUniqueId = () => Math.random().toString(36).substring(2, 9);
+
 export default function MultiStepRegistration() {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [kycError, setKycError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   
   // Centralized State
@@ -53,8 +57,11 @@ export default function MultiStepRegistration() {
     otpSent: false,
     otp: '',
     salonName: '',
-    pincode: '',
     kycNumber: '',
+    searchLocation: '',
+    manualAddress: '',
+    lat: null as number | null,
+    lng: null as number | null,
     category: CATEGORIES[0],
     services: [] as any[]
   });
@@ -125,15 +132,26 @@ export default function MultiStepRegistration() {
   };
 
   const handleStep2Next = () => {
-    if (!formData.salonName.trim() || !formData.pincode.trim() || !formData.kycNumber.trim()) {
-      setError("Please complete all business verification fields.");
+    setKycError(null);
+    if (!formData.salonName.trim() || !formData.searchLocation.trim() || !formData.manualAddress.trim() || !formData.kycNumber.trim()) {
+      setError("Please complete all business and location fields.");
       return;
     }
+
+    // Basic KYC Validation (Aadhaar 12 digits, PAN 10 chars, GST 15 chars)
+    const kycClean = formData.kycNumber.replace(/\s/g, '');
+    const isKycValid = /^[A-Z0-9]{10,15}$/i.test(kycClean);
+    
+    if (!isKycValid) {
+      setKycError("Please enter a valid Aadhaar, PAN or GST number.");
+      return;
+    }
+
     setError(null);
     // Setup initial services based on selected category if not already set or category changed
     const initialServices = DEFAULT_SERVICES[formData.category].map(s => ({
       ...s,
-      id: Math.random().toString(36).substring(7)
+      id: generateUniqueId()
     }));
     setFormData(prev => ({ ...prev, services: initialServices }));
     setStep(3);
@@ -163,7 +181,9 @@ export default function MultiStepRegistration() {
           name: formData.salonName,
           owner_name: `${formData.firstName} ${formData.lastName}`,
           phone: formData.mobile,
-          pincode: formData.pincode,
+          address: formData.manualAddress,
+          latitude: formData.lat,
+          longitude: formData.lng,
           status: 'Active',
           owner_id: user?.id || null
         })
@@ -229,11 +249,12 @@ export default function MultiStepRegistration() {
 
   const addCustomService = () => {
     const customService = {
-      id: Math.random().toString(36).substring(7),
-      name: "Custom Service",
-      price: 500,
+      id: generateUniqueId(),
+      name: "",
+      price: 0,
       duration: 30,
-      selected: true
+      selected: true,
+      isCustom: true
     };
     setFormData(prev => ({
       ...prev,
@@ -339,8 +360,8 @@ export default function MultiStepRegistration() {
               <button onClick={() => setStep(1)} className="mb-6 flex items-center gap-2 text-xs font-bold text-gray-400 hover:text-neutral-950 transition-colors uppercase tracking-widest">
                 <ArrowLeft size={14} /> Back
               </button>
-              <h1 className="text-2xl font-bold tracking-tight text-neutral-950 mb-2">Business KYC</h1>
-              <p className="text-sm text-gray-500 mb-8">Tell us about your grooming space.</p>
+              <h1 className="text-2xl font-bold tracking-tight text-neutral-950 mb-2">Business & Location</h1>
+              <p className="text-sm text-gray-500 mb-8">Tell us where your grooming space is located.</p>
 
               <div className="space-y-5">
                 <div className="space-y-2">
@@ -348,15 +369,52 @@ export default function MultiStepRegistration() {
                   <input value={formData.salonName} onChange={e => setFormData({ ...formData, salonName: e.target.value })} className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-neutral-950 focus:bg-white focus:ring-2 focus:ring-neutral-950/5 focus:border-neutral-950 transition-all outline-none" placeholder="e.g. The Sharp Cut" />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-4 pt-2">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1 block text-left">Pincode</label>
-                    <input value={formData.pincode} onChange={e => setFormData({ ...formData, pincode: e.target.value })} className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-neutral-950 focus:bg-white focus:ring-2 focus:ring-neutral-950/5 focus:border-neutral-950 transition-all outline-none" placeholder="482001" />
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1 block text-left">Search Location</label>
+                    <Autocomplete
+                      apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
+                      onPlaceSelected={(place) => {
+                        const lat = place.geometry?.location?.lat() || null;
+                        const lng = place.geometry?.location?.lng() || null;
+                        setFormData(prev => ({ 
+                          ...prev, 
+                          searchLocation: place.formatted_address || '',
+                          lat,
+                          lng
+                        }));
+                      }}
+                      options={{
+                        types: ["address"],
+                        componentRestrictions: { country: "in" },
+                      }}
+                      defaultValue={formData.searchLocation}
+                      className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-neutral-950 focus:bg-white focus:ring-2 focus:ring-neutral-950/5 focus:border-neutral-950 transition-all outline-none"
+                      placeholder="Search your area..."
+                    />
                   </div>
+
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1 block text-left">Aadhaar / GSTIN</label>
-                    <input value={formData.kycNumber} onChange={e => setFormData({ ...formData, kycNumber: e.target.value })} className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-neutral-950 focus:bg-white focus:ring-2 focus:ring-neutral-950/5 focus:border-neutral-950 transition-all outline-none" placeholder="Business Verification" />
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1 block text-left">Manual Address Details</label>
+                    <textarea 
+                      value={formData.manualAddress} 
+                      onChange={e => setFormData({ ...formData, manualAddress: e.target.value })} 
+                      rows={3}
+                      className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-neutral-950 focus:bg-white focus:ring-2 focus:ring-neutral-950/5 focus:border-neutral-950 transition-all outline-none resize-none" 
+                      placeholder="Shop No, Building, Street details..." 
+                    />
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1 block text-left">Aadhaar / GSTIN / PAN</label>
+                  <input 
+                    value={formData.kycNumber} 
+                    onChange={e => setFormData({ ...formData, kycNumber: e.target.value })} 
+                    className={`w-full px-4 py-3.5 bg-gray-50 border ${kycError ? 'border-red-500' : 'border-gray-200'} rounded-xl text-sm font-medium text-neutral-950 focus:bg-white focus:ring-2 focus:ring-neutral-950/5 focus:border-neutral-950 transition-all outline-none`} 
+                    placeholder="Business Verification ID" 
+                  />
+                  {kycError && <p className="text-[10px] text-red-500 font-bold ml-1">{kycError}</p>}
                 </div>
 
                 <div className="space-y-2 pt-2">
@@ -403,7 +461,8 @@ export default function MultiStepRegistration() {
                         value={s.name}
                         onChange={(e) => updateServiceName(s.id, e.target.value)}
                         disabled={!s.selected}
-                        className="font-bold text-sm text-neutral-950 bg-transparent border-none focus:outline-none focus:ring-0 p-0 w-full"
+                        placeholder={s.isCustom ? "Service Name (e.g. Bridal Makeup)" : "Service Name"}
+                        className="font-bold text-sm text-neutral-950 bg-transparent border-none focus:outline-none focus:ring-0 p-0 w-full placeholder:text-gray-300"
                       />
                     </div>
                     
@@ -465,9 +524,10 @@ export default function MultiStepRegistration() {
                   <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Owner</span>
                   <span className="text-sm font-bold text-neutral-950">{formData.firstName} {formData.lastName}</span>
                 </div>
-                <div className="flex justify-between items-center pb-4 border-b border-gray-200">
-                  <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Mobile</span>
-                  <span className="text-sm font-bold text-neutral-950">{formData.mobile}</span>
+                <div className="flex flex-col gap-1 pb-4 border-b border-gray-200">
+                  <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Address</span>
+                  <span className="text-sm font-bold text-neutral-950 leading-relaxed">{formData.manualAddress}</span>
+                  <span className="text-[10px] text-gray-400 italic">{formData.searchLocation}</span>
                 </div>
                 <div className="flex justify-between items-center pb-4 border-b border-gray-200">
                   <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Category</span>
