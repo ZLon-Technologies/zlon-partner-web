@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { CheckCircle2, Loader2, ArrowRight, ArrowLeft, ShieldCheck, Check, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { auth } from '@/lib/firebase';
+import { RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from 'firebase/auth';
 
 const CATEGORIES = ['Hair Salon', 'Barbershop', 'Nail Studio', 'Med Spa'];
 
@@ -57,24 +59,69 @@ export default function MultiStepRegistration() {
     services: [] as any[]
   });
 
+  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
+
   const supabase = createClient();
 
-  const handleSendOtp = () => {
+  const handleSendOtp = async () => {
     if (!formData.firstName.trim() || !formData.lastName.trim() || formData.mobile.length < 10) {
       setError("Please fill all identity fields with a valid mobile number.");
       return;
     }
+    
+    setLoading(true);
     setError(null);
-    setFormData(prev => ({ ...prev, otpSent: true }));
+
+    try {
+      const formattedMobile = formData.mobile.startsWith('+') ? formData.mobile : `+91${formData.mobile}`;
+      
+      let verifier = (window as any).recaptchaVerifier;
+      if (!verifier) {
+        verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+          'size': 'invisible'
+        });
+        (window as any).recaptchaVerifier = verifier;
+      }
+
+      const confirmation = await signInWithPhoneNumber(auth, formattedMobile, verifier);
+      setConfirmationResult(confirmation);
+      setFormData(prev => ({ ...prev, otpSent: true }));
+      setToast({ message: "OTP sent successfully!", type: 'success' });
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Failed to send OTP. Please try again.");
+      if (err.code === 'auth/invalid-phone-number') {
+        setError("Invalid phone number. Please include country code or enter 10 digits.");
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleVerifyOtp = () => {
-    if (formData.otp !== "1234") {
-      setError("Invalid OTP. Please enter '1234' for this verification.");
+  const handleVerifyOtp = async () => {
+    if (!confirmationResult) {
+      setError("Session expired. Please request a new OTP.");
       return;
     }
+
+    if (formData.otp.length !== 6) {
+      setError("Please enter the 6-digit OTP sent to your mobile.");
+      return;
+    }
+
+    setLoading(true);
     setError(null);
-    setStep(2);
+
+    try {
+      await confirmationResult.confirm(formData.otp);
+      setToast({ message: "Mobile verified!", type: 'success' });
+      setStep(2);
+    } catch (err: any) {
+      console.error(err);
+      setError("Invalid OTP. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleStep2Next = () => {
@@ -267,20 +314,20 @@ export default function MultiStepRegistration() {
 
                 {formData.otpSent && (
                   <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-2 pt-4 border-t border-gray-50 mt-6">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1 block text-center">Enter 4-Digit OTP (Use 1234)</label>
-                    <input type="text" maxLength={4} value={formData.otp} onChange={e => setFormData({ ...formData, otp: e.target.value })} className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-neutral-950 focus:bg-white focus:ring-2 focus:ring-neutral-950/5 focus:border-neutral-950 transition-all outline-none text-center tracking-[0.5em] text-lg" placeholder="••••" />
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1 block text-center">Enter 6-Digit OTP</label>
+                    <input type="text" maxLength={6} value={formData.otp} onChange={e => setFormData({ ...formData, otp: e.target.value })} className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-neutral-950 focus:bg-white focus:ring-2 focus:ring-neutral-950/5 focus:border-neutral-950 transition-all outline-none text-center tracking-[0.5em] text-lg" placeholder="••••••" />
                   </motion.div>
                 )}
               </div>
 
               <div className="mt-8 pt-6 border-t border-gray-50 flex gap-3">
                 {!formData.otpSent ? (
-                  <button onClick={handleSendOtp} className="w-full bg-neutral-950 text-white font-bold text-sm py-4 rounded-xl shadow-lg shadow-black/10 hover:bg-neutral-800 transition-all active:scale-[0.98]">
-                    Send OTP
+                  <button onClick={handleSendOtp} disabled={loading} className="w-full bg-neutral-950 text-white font-bold text-sm py-4 rounded-xl shadow-lg shadow-black/10 hover:bg-neutral-800 transition-all active:scale-[0.98] flex items-center justify-center gap-2">
+                    {loading ? <Loader2 size={16} className="animate-spin" /> : 'Send OTP'}
                   </button>
                 ) : (
-                  <button onClick={handleVerifyOtp} disabled={formData.otp.length !== 4} className="w-full bg-neutral-950 text-white font-bold text-sm py-4 rounded-xl shadow-lg shadow-black/10 hover:bg-neutral-800 transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50">
-                    Verify & Continue <ArrowRight size={16} />
+                  <button onClick={handleVerifyOtp} disabled={formData.otp.length !== 6 || loading} className="w-full bg-neutral-950 text-white font-bold text-sm py-4 rounded-xl shadow-lg shadow-black/10 hover:bg-neutral-800 transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50">
+                    {loading ? <Loader2 size={16} className="animate-spin" /> : <>Verify & Continue <ArrowRight size={16} /></>}
                   </button>
                 )}
               </div>
@@ -445,6 +492,8 @@ export default function MultiStepRegistration() {
           )}
         </motion.div>
       </div>
+
+      <div id="recaptcha-container"></div>
 
       <footer className="w-full py-8 flex flex-col items-center gap-3 mt-auto">
         <div className="flex items-center gap-4 text-sm font-medium text-gray-500">
