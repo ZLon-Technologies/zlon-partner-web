@@ -62,6 +62,7 @@ export default function MultiStepRegistration() {
     manualAddress: '',
     lat: null as number | null,
     lng: null as number | null,
+    document_url: '',
     category: CATEGORIES[0],
     services: [] as any[]
   });
@@ -131,10 +132,47 @@ export default function MultiStepRegistration() {
     }
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${generateUniqueId()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { data, error: uploadError } = await supabase.storage
+        .from('verification-docs')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('verification-docs')
+        .getPublicUrl(filePath);
+
+      setFormData(prev => ({ ...prev, document_url: publicUrl }));
+      setToast({ message: "Verification document uploaded!", type: 'success' });
+    } catch (err: any) {
+      console.error(err);
+      setError("Failed to upload document. Please ensure the bucket 'verification-docs' exists and is public.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleStep2Next = () => {
     setKycError(null);
     if (!formData.salonName.trim() || !formData.searchLocation.trim() || !formData.manualAddress.trim() || !formData.kycNumber.trim()) {
       setError("Please complete all business and location fields.");
+      return;
+    }
+
+    if (!formData.document_url) {
+      setError("Please upload a verification document (License/ID).");
       return;
     }
 
@@ -184,7 +222,9 @@ export default function MultiStepRegistration() {
           address: formData.manualAddress,
           latitude: formData.lat,
           longitude: formData.lng,
-          status: 'Active',
+          document_url: formData.document_url,
+          kyc_number: formData.kycNumber,
+          status: 'pending',
           owner_id: user?.id || null
         })
         .select()
@@ -412,9 +452,28 @@ export default function MultiStepRegistration() {
                     value={formData.kycNumber} 
                     onChange={e => setFormData({ ...formData, kycNumber: e.target.value })} 
                     className={`w-full px-4 py-3.5 bg-gray-50 border ${kycError ? 'border-red-500' : 'border-gray-200'} rounded-xl text-sm font-medium text-neutral-950 focus:bg-white focus:ring-2 focus:ring-neutral-950/5 focus:border-neutral-950 transition-all outline-none`} 
-                    placeholder="Business Verification ID" 
+                    placeholder="e.g. 1234 5678 9012 or ABCDE1234F" 
                   />
                   {kycError && <p className="text-[10px] text-red-500 font-bold ml-1">{kycError}</p>}
+                </div>
+
+                <div className="space-y-2 pt-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1 block text-left">Verification Document (License/ID)</label>
+                  <div className="relative group">
+                    <input 
+                      type="file" 
+                      accept="image/*,application/pdf" 
+                      onChange={handleFileUpload}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
+                    />
+                    <div className={`w-full px-4 py-3.5 bg-gray-50 border-2 border-dashed ${formData.document_url ? 'border-green-500 bg-green-50/10' : 'border-gray-200 group-hover:border-gray-300'} rounded-xl text-sm font-medium text-gray-500 flex items-center justify-center gap-2 transition-all`}>
+                      {formData.document_url ? (
+                        <><Check size={16} className="text-green-600" /> <span className="text-green-700 font-bold">Document Ready</span></>
+                      ) : (
+                        <><Plus size={16} /> <span>Upload Photo or PDF</span></>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="space-y-2 pt-2">
