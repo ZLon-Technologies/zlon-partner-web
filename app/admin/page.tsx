@@ -17,7 +17,8 @@ export default async function AdminPage() {
 
   const { data: pendingSalons, error } = await supabase
     .from('salons')
-    .filter('status', 'eq', 'pending')
+    .select('*')
+    .eq('status', 'pending')
     .order('created_at', { ascending: false });
 
   if (error) {
