@@ -108,7 +108,7 @@ export default async function AdminPage() {
                       </div>
                     </div>
                     
-                    <form action={approveSalon}>
+                    <form action={async (formData) => { await approveSalon(formData); }}>
                       <input type="hidden" name="salonId" value={salon.id} />
                       <button 
                         type="submit"
