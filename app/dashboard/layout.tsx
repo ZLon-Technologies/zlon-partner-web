@@ -1,4 +1,9 @@
-import { createClient } from '@/utils/supabase/server';
+'use client';
+
+import { auth } from '@/lib/firebase';
+import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
   LayoutDashboard, 
@@ -10,15 +15,37 @@ import {
   User
 } from 'lucide-react';
 
-export default async function DashboardLayout({
+export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
+  const [user, setUser] = useState<FirebaseUser | null>(auth.currentUser);
+  const [loading, setLoading] = useState(!auth.currentUser);
+  const router = useRouter();
 
-  // Fetch user session for UI display only (Route protection is handled by proxy.ts)
-  const { data: { user } } = await supabase.auth.getUser();
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setLoading(false);
+      if (!u) {
+        router.push('/login');
+      }
+    });
+    return () => unsubscribe();
+  }, [router]);
+
+  if (loading) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-[#F9F9F9]">
+        <div className="animate-pulse flex flex-col items-center gap-4">
+          <div className="text-xl font-extrabold text-neutral-950 tracking-tighter">
+            ZLon<span className="text-gray-400 font-medium ml-1">Partner</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen w-screen bg-[#F9F9F9] overflow-hidden antialiased font-sans">
@@ -80,7 +107,7 @@ export default async function DashboardLayout({
             </div>
             <div className="min-w-0">
               <p className="text-[10px] font-bold text-neutral-950 truncate uppercase tracking-tight">Active Partner</p>
-              <p className="text-[9px] text-gray-400 font-medium truncate">{user?.email || 'Guest'}</p>
+              <p className="text-[9px] text-gray-400 font-medium truncate">{user?.email || user?.phoneNumber || 'Partner'}</p>
             </div>
           </div>
           

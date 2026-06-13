@@ -14,9 +14,9 @@ import {
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
-import { createClient } from '@/utils/supabase/client';
+import { auth } from '@/lib/firebase';
+import { signOut, type User as FirebaseUser } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
-import { User } from '@supabase/supabase-js';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -30,13 +30,12 @@ const navItems = [
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
 ];
 
-export function Sidebar({ user }: { user?: User }) {
+export function Sidebar({ user }: { user?: FirebaseUser | null }) {
   const pathname = usePathname();
   const router = useRouter();
-  const supabase = createClient();
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await signOut(auth);
     router.push('/login');
     router.refresh();
   };
@@ -79,11 +78,11 @@ export function Sidebar({ user }: { user?: User }) {
         <div className="bg-gray-50 rounded-2xl p-4 mb-4">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-8 h-8 rounded-full bg-neutral-200 border border-neutral-300 flex items-center justify-center text-[10px] font-bold">
-              {user?.email?.[0].toUpperCase()}
+              {user?.email?.[0].toUpperCase() || user?.phoneNumber?.[user.phoneNumber.length - 1] || 'P'}
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-bold truncate">{user?.email?.split('@')[0] || 'Partner'}</p>
-              <p className="text-[10px] text-gray-500 truncate">{user?.email}</p>
+              <p className="text-xs font-bold truncate">{user?.email?.split('@')[0] || user?.phoneNumber || 'Partner'}</p>
+              <p className="text-[10px] text-gray-500 truncate">{user?.email || 'Partner Account'}</p>
             </div>
           </div>
         </div>

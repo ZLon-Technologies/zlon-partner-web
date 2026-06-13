@@ -1,3 +1,5 @@
+'use client';
+
 import { 
   TrendingUp, 
   Calendar, 
@@ -8,38 +10,83 @@ import {
   ChevronRight,
   Plus
 } from 'lucide-react';
-import { createClient } from '@/utils/supabase/server';
+import { db, auth } from '@/lib/firebase';
+import { collection, query, where, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 
-export default async function Dashboard() {
-  const supabase = await createClient();
-  
-  // Get today's date range
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+export default function Dashboard() {
+  const [bookings, setBookings] = useState<any[]>([]);
+  const [popularServices, setPopularServices] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // 1. Fetch Today's Bookings for Metrics and Schedule
-  const { data: bookings } = await supabase
-    .from('bookings')
-    .select('*, services(*), customers(*)')
-    .gte('appointment_time', today.toISOString())
-    .lt('appointment_time', tomorrow.toISOString())
-    .order('appointment_time', { ascending: true });
+  useEffect(() => {
+    async function fetchData() {
+      const user = auth.currentUser;
+      if (!user) return;
 
-  // 2. Fetch Popular Services
-  const { data: popularServices } = await supabase
-    .from('services')
-    .select('*')
-    .order('bookings_count', { ascending: false })
-    .limit(3);
+      try {
+        // 1. Get Today's Date Range
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
 
-  // Metrics Calculation
-  const todayBookings = bookings || [];
-  const todayRevenue = todayBookings.reduce((acc, booking) => acc + (booking.total_price || 0), 0);
-  const upcomingCount = todayBookings.filter(b => b.status !== 'Cancelled' && b.status !== 'Completed').length;
+        // 2. Fetch Today's Bookings for this partner
+        // In Firestore, we should have a 'bookings' collection.
+        // Partners should only see bookings for their salons.
+        // Assuming 'salon_id' is used to link bookings to salons, and salons have an 'owner_id'.
+        // First, we need to find the partner's salon(s).
+        
+        const salonsQuery = query(collection(db, 'salons'), where('owner_id', '==', user.uid));
+        const salonsSnap = await getDocs(salonsQuery);
+        const salonIds = salonsSnap.docs.map(doc => doc.id);
+
+        if (salonIds.length > 0) {
+          const bookingsQuery = query(
+            collection(db, 'bookings'),
+            where('salon_id', 'in', salonIds),
+            where('appointment_time', '>=', Timestamp.fromDate(today)),
+            where('appointment_time', '<', Timestamp.fromDate(tomorrow)),
+            orderBy('appointment_time', 'asc')
+          );
+          const bookingsSnap = await getDocs(bookingsQuery);
+          setBookings(bookingsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        }
+
+        // 3. Fetch Popular Services
+        if (salonIds.length > 0) {
+          const servicesQuery = query(
+            collection(db, 'services'),
+            where('salon_id', 'in', salonIds),
+            orderBy('bookings_count', 'desc'),
+            limit(3)
+          );
+          const servicesSnap = await getDocs(servicesQuery);
+          setPopularServices(servicesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        }
+
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchData();
+  }, []);
+
+  const todayRevenue = bookings.reduce((acc, booking) => acc + (booking.total_price || 0), 0);
+  const upcomingCount = bookings.filter(b => b.status !== 'Cancelled' && b.status !== 'Completed').length;
+
+  if (isLoading) {
+    return (
+      <div className="p-8 flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-neutral-950"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 space-y-10">
@@ -48,8 +95,8 @@ export default async function Dashboard() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-neutral-950">Dashboard</h1>
           <p className="text-gray-500 font-medium mt-1">
-            {todayBookings.length > 0 
-              ? `You have ${todayBookings.length} appointments today.` 
+            {bookings.length > 0 
+              ? `You have ${bookings.length} appointments today.` 
               : "Welcome back. Here's what's happening today."}
           </p>
         </div>
@@ -65,9 +112,8 @@ export default async function Dashboard() {
         </div>
       </header>
 
-      {/* Metrics Row - Adjusted to 2 columns as requested */}
+      {/* Metrics Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-        {/* Revenue Card */}
         <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-gray-100 transition-all hover:shadow-md group relative overflow-hidden">
           <div className="flex items-start justify-between mb-4 relative z-10">
             <div className="bg-gray-50 p-3 rounded-2xl group-hover:bg-neutral-950 group-hover:text-white transition-all duration-300">
@@ -81,11 +127,9 @@ export default async function Dashboard() {
             <p className="text-xs font-bold text-gray-400 uppercase tracking-[0.2em]">Today's Revenue</p>
             <h2 className="text-4xl font-bold mt-2 text-neutral-950">₹{todayRevenue.toLocaleString('en-IN')}</h2>
           </div>
-          {/* Subtle background flair */}
           <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-gray-50 rounded-full opacity-50 group-hover:scale-110 transition-transform" />
         </div>
 
-        {/* Bookings Card */}
         <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-gray-100 transition-all hover:shadow-md group relative overflow-hidden">
           <div className="flex items-start justify-between mb-4 relative z-10">
             <div className="bg-gray-50 p-3 rounded-2xl group-hover:bg-neutral-950 group-hover:text-white transition-all duration-300">
@@ -102,7 +146,6 @@ export default async function Dashboard() {
 
       {/* Main Grid: Schedule and Insights */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Today's Schedule List */}
         <div className="lg:col-span-2 space-y-6">
           <div className="flex items-center justify-between px-2">
             <h2 className="text-xl font-bold tracking-tight text-neutral-950">Today's Schedule</h2>
@@ -112,22 +155,22 @@ export default async function Dashboard() {
           </div>
 
           <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50">
-            {todayBookings.length > 0 ? (
-              todayBookings.map((booking) => (
+            {bookings.length > 0 ? (
+              bookings.map((booking) => (
                 <div key={booking.id} className="p-6 flex items-center justify-between hover:bg-gray-50 transition-all group cursor-pointer active:scale-[0.995]">
                   <div className="flex items-center gap-5">
                     <div className="flex flex-col items-center justify-center bg-gray-50 w-16 h-16 rounded-2xl group-hover:bg-white transition-colors border border-transparent group-hover:border-gray-100">
                       <Clock size={20} className="text-gray-400 mb-1" />
                       <span className="text-[10px] font-bold text-gray-600">
-                        {format(new Date(booking.appointment_time), 'hh:mm')}
+                        {booking.appointment_time?.toDate ? format(booking.appointment_time.toDate(), 'hh:mm') : '--:--'}
                       </span>
                     </div>
                     <div>
                       <h3 className="font-bold text-neutral-900 group-hover:text-black">
-                        {booking.customers?.full_name || 'Guest Customer'}
+                        {booking.customer_name || 'Guest Customer'}
                       </h3>
                       <p className="text-sm text-gray-500 font-medium">
-                        {booking.services?.name || 'Standard Service'}
+                        {booking.service_name || 'Standard Service'}
                       </p>
                     </div>
                   </div>
@@ -172,7 +215,6 @@ export default async function Dashboard() {
           </div>
         </div>
 
-        {/* Sidebar Insights/Stats */}
         <div className="space-y-8">
           <div className="flex items-center gap-2 px-2">
             <TrendingUp className="w-5 h-5 text-neutral-950" strokeWidth={2} />
@@ -204,7 +246,7 @@ export default async function Dashboard() {
               Popular Services
             </h3>
             <div className="space-y-6">
-              {popularServices && popularServices.length > 0 ? (
+              {popularServices.length > 0 ? (
                 popularServices.map((service) => (
                   <div key={service.id} className="flex items-center justify-between group cursor-pointer">
                     <div className="flex-1 min-w-0 pr-4">

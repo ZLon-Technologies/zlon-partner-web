@@ -2,35 +2,36 @@
 
 import React, { useState, useEffect } from 'react';
 import { Calendar, Plus, X, Loader2, CheckCircle2, Clock, User, Scissors } from 'lucide-react';
-import { createClient } from '@/utils/supabase/client';
+import { db, auth } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
+import { collection, query, where, getDocs, addDoc, serverTimestamp, orderBy, getDoc, doc } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
 
 interface Service {
-  id: number;
+  id: string;
   name: string;
   price: number;
 }
 
 interface StaffMember {
-  id: number;
+  id: string;
   name: string;
 }
 
 interface Booking {
-  id: number;
+  id: string;
   appointment_time: string;
   status: string;
   customer_name?: string;
   customer_phone?: string;
   total_price: number;
-  services?: Service;
-  staff?: StaffMember;
-  customers?: { full_name: string };
+  service_name?: string;
+  staff_name?: string;
 }
 
 export default function BookingsPage() {
-  const [salonId, setSalonId] = useState<number | null>(null);
+  const [salonId, setSalonId] = useState<string | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
@@ -51,45 +52,62 @@ export default function BookingsPage() {
     staff_id: '',
   });
 
-  const supabase = createClient();
   const router = useRouter();
 
-  const fetchData = async () => {
+  const fetchData = async (user: any) => {
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
+    try {
+      const salonsQuery = query(collection(db, 'salons'), where('owner_id', '==', user.uid));
+      const salonsSnapshot = await getDocs(salonsQuery);
 
-    if (user) {
-      const { data: salonData } = await supabase
-        .from('salons')
-        .select('id')
-        .eq('owner_id', user.id)
-        .single();
-
-      if (salonData) {
-        setSalonId(salonData.id);
+      if (!salonsSnapshot.empty) {
+        const salonDoc = salonsSnapshot.docs[0];
+        const currentSalonId = salonDoc.id;
+        setSalonId(currentSalonId);
         
         // Parallel queries
-        const [bookingsRes, servicesRes, staffRes] = await Promise.all([
-          supabase
-            .from('bookings')
-            .select('*, services(id, name, price), staff(id, name), customers(full_name)')
-            .eq('salon_id', salonData.id)
-            .order('appointment_time', { ascending: true }),
-          supabase.from('services').select('id, name, price').eq('salon_id', salonData.id),
-          supabase.from('staff').select('id, name').eq('salon_id', salonData.id)
+        const [bookingsSnapshot, servicesSnapshot, staffSnapshot] = await Promise.all([
+          getDocs(query(collection(db, 'bookings'), where('salon_id', '==', currentSalonId), orderBy('appointment_time', 'asc'))),
+          getDocs(query(collection(db, 'services'), where('salon_id', '==', currentSalonId))),
+          getDocs(query(collection(db, 'staff'), where('salon_id', '==', currentSalonId)))
         ]);
 
-        if (bookingsRes.data) setBookings(bookingsRes.data);
-        if (servicesRes.data) setServices(servicesRes.data);
-        if (staffRes.data) setStaff(staffRes.data);
+        const servicesData = servicesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Service));
+        const staffData = staffSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StaffMember));
+
+        const bookingsData = bookingsSnapshot.docs.map(doc => {
+          const data = doc.data();
+          const service = servicesData.find(s => s.id === data.service_id);
+          const staffMember = staffData.find(s => s.id === data.staff_id);
+          
+          return {
+            id: doc.id,
+            ...data,
+            service_name: service?.name,
+            staff_name: staffMember?.name
+          } as Booking;
+        });
+
+        setBookings(bookingsData);
+        setServices(servicesData);
+        setStaff(staffData);
       }
+    } catch (err) {
+      console.error("Error fetching data:", err);
     }
     setLoading(false);
   };
 
   useEffect(() => {
-    fetchData();
-  }, [supabase]);
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        fetchData(user);
+      } else {
+        router.push('/login');
+      }
+    });
+    return () => unsubscribe();
+  }, [router]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -107,30 +125,34 @@ export default function BookingsPage() {
       const appointmentTimestamp = new Date(`${formData.appointment_date}T${formData.appointment_time}`).toISOString();
       
       // Find service to get price
-      const selectedService = services.find(s => s.id.toString() === formData.service_id);
+      const selectedService = services.find(s => s.id === formData.service_id);
       const price = selectedService ? selectedService.price : 0;
 
-      const { data, error } = await supabase
-        .from('bookings')
-        .insert({
-          salon_id: salonId,
-          service_id: parseInt(formData.service_id),
-          staff_id: formData.staff_id ? parseInt(formData.staff_id) : null,
-          customer_name: formData.customer_name,
-          customer_phone: formData.customer_phone,
-          appointment_time: appointmentTimestamp,
-          status: 'Confirmed',
-          total_price: price,
-        })
-        .select('*, services(id, name, price), staff(id, name), customers(full_name)')
-        .single();
+      const bookingData = {
+        salon_id: salonId,
+        service_id: formData.service_id,
+        staff_id: formData.staff_id || null,
+        customer_name: formData.customer_name,
+        customer_phone: formData.customer_phone,
+        appointment_time: appointmentTimestamp,
+        status: 'Confirmed',
+        total_price: price,
+        created_at: serverTimestamp()
+      };
 
-      if (error) {
-        throw error;
-      }
+      const docRef = await addDoc(collection(db, 'bookings'), bookingData);
 
       setMessage({ type: 'success', text: 'Appointment scheduled successfully!' });
-      setBookings(prev => [...prev, data].sort((a, b) => new Date(a.appointment_time).getTime() - new Date(b.appointment_time).getTime()));
+      
+      const newBooking: Booking = {
+        id: docRef.id,
+        ...bookingData,
+        created_at: undefined, // serverTimestamp is not immediately available as string
+        service_name: selectedService?.name,
+        staff_name: staff.find(s => s.id === formData.staff_id)?.name
+      } as any;
+
+      setBookings(prev => [...prev, newBooking].sort((a, b) => new Date(a.appointment_time).getTime() - new Date(b.appointment_time).getTime()));
       
       setFormData({
         customer_name: '',
@@ -145,12 +167,11 @@ export default function BookingsPage() {
         setIsModalOpen(false);
         setMessage(null);
         setIsSaving(false);
-        router.refresh();
       }, 1500);
 
     } catch (error: any) {
       console.error("Booking insert error:", error);
-      setMessage({ type: 'error', text: error.message || 'Failed to create booking. Please check database schema constraints.' });
+      setMessage({ type: 'error', text: error.message || 'Failed to create booking.' });
       setIsSaving(false);
     }
   };
@@ -218,17 +239,17 @@ export default function BookingsPage() {
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-2 text-sm font-bold text-neutral-950">
                         <User size={14} className="text-gray-400" />
-                        {booking.customer_name || booking.customers?.full_name || 'Guest Customer'}
+                        {booking.customer_name || 'Guest Customer'}
                       </div>
                     </td>
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-2 text-sm font-bold text-neutral-950">
                         <Scissors size={14} className="text-gray-400" />
-                        {booking.services?.name || 'Standard Service'}
+                        {booking.service_name || 'Standard Service'}
                       </div>
                     </td>
                     <td className="px-8 py-6 text-sm text-gray-500 font-medium">
-                      {booking.staff?.name || 'Unassigned'}
+                      {booking.staff_name || 'Unassigned'}
                     </td>
                     <td className="px-8 py-6">
                       <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${

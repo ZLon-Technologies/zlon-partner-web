@@ -2,22 +2,24 @@
 
 import React, { useState, useEffect } from 'react';
 import { Users, UserPlus, MoreHorizontal, X, Loader2, CheckCircle2, User, Phone, Mail } from 'lucide-react';
-import { createClient } from '@/utils/supabase/client';
+import { db, auth } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
+import { collection, query, where, getDocs, addDoc, serverTimestamp, orderBy } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
 
 interface StaffMember {
-  id: string | number;
+  id: string;
   name: string;
   role: string;
   email: string;
   phone: string;
-  salon_id: number;
+  salon_id: string;
 }
 
 export default function StaffPage() {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
-  const [salonId, setSalonId] = useState<number | null>(null);
+  const [salonId, setSalonId] = useState<string | null>(null);
   const [ownerEmail, setOwnerEmail] = useState<string | null>(null);
   
   // Modal state
@@ -33,43 +35,51 @@ export default function StaffPage() {
     phone: '',
   });
 
-  const supabase = createClient();
   const router = useRouter();
 
-  const fetchStaff = async () => {
+  const fetchStaff = async (user: any) => {
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (user) {
+    try {
       setOwnerEmail(user.email ?? null);
-      // Get the salon_id for this user
-      const { data: salonData, error: salonError } = await supabase
-        .from('salons')
-        .select('id')
-        .eq('owner_id', user.id)
-        .single();
+      
+      const salonsQuery = query(collection(db, 'salons'), where('owner_id', '==', user.uid));
+      const salonsSnapshot = await getDocs(salonsQuery);
 
-      if (salonData && !salonError) {
-        setSalonId(salonData.id);
+      if (!salonsSnapshot.empty) {
+        const salonDoc = salonsSnapshot.docs[0];
+        const currentSalonId = salonDoc.id;
+        setSalonId(currentSalonId);
         
-        // Fetch staff for this salon
-        const { data: staffData } = await supabase
-          .from('staff')
-          .select('*')
-          .eq('salon_id', salonData.id)
-          .order('name', { ascending: true });
-          
-        if (staffData) {
-          setStaff(staffData);
-        }
+        const staffQuery = query(
+          collection(db, 'staff'), 
+          where('salon_id', '==', currentSalonId)
+        );
+        const staffSnapshot = await getDocs(staffQuery);
+        
+        const staffData = staffSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as StaffMember));
+
+        staffData.sort((a, b) => a.name.localeCompare(b.name));
+        setStaff(staffData);
       }
+    } catch (err) {
+      console.error("Error fetching staff:", err);
     }
     setLoading(false);
   };
 
   useEffect(() => {
-    fetchStaff();
-  }, [supabase]);
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        fetchStaff(user);
+      } else {
+        router.push('/login');
+      }
+    });
+    return () => unsubscribe();
+  }, [router]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -82,33 +92,33 @@ export default function StaffPage() {
     setIsSaving(true);
     setMessage(null);
 
-    const { data, error } = await supabase
-      .from('staff')
-      .insert({
+    try {
+      const staffData = {
         salon_id: salonId,
         name: formData.name,
         role: formData.role,
         email: formData.email,
         phone: formData.phone,
-      })
-      .select()
-      .single();
+        created_at: serverTimestamp()
+      };
 
-    if (error) {
-      setMessage({ type: 'error', text: error.message });
-      setIsSaving(false);
-    } else {
-      setMessage({ type: 'success', text: 'Staff member invited successfully!' });
-      setStaff(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
+      const docRef = await addDoc(collection(db, 'staff'), staffData);
       
-      // Reset form and close after a brief delay to show success
+      const newStaffMember = { id: docRef.id, ...staffData } as StaffMember;
+      
+      setMessage({ type: 'success', text: 'Staff member invited successfully!' });
+      setStaff(prev => [...prev, newStaffMember].sort((a, b) => a.name.localeCompare(b.name)));
+      
       setFormData({ name: '', role: '', email: '', phone: '' });
       setTimeout(() => {
         setIsModalOpen(false);
         setMessage(null);
         setIsSaving(false);
-        router.refresh();
       }, 1500);
+    } catch (error: any) {
+      console.error("Error adding staff member:", error);
+      setMessage({ type: 'error', text: error.message });
+      setIsSaving(false);
     }
   };
 

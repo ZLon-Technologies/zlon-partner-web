@@ -1,22 +1,14 @@
 'use server';
 
-import { createClient } from '@/utils/supabase/server';
+import { db } from '@/lib/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
 import { revalidatePath } from 'next/cache';
 
 export async function approveApplication(applicationId: string) {
   try {
-    const supabase = await createClient();
-
     // Update application status to 'approved'
-    // Note: User creation and salon record insertion should be handled by 
-    // a Supabase Edge Function or Database Trigger on status change 
-    // since we no longer use the Service Role Key here.
-    const { error } = await supabase
-      .from('salon_applications')
-      .update({ status: 'approved' })
-      .eq('id', applicationId);
-
-    if (error) throw error;
+    const appRef = doc(db, 'salon_applications', applicationId);
+    await updateDoc(appRef, { status: 'approved' });
 
     revalidatePath('/admin');
     return { success: true };
@@ -28,14 +20,8 @@ export async function approveApplication(applicationId: string) {
 
 export async function rejectApplication(applicationId: string) {
   try {
-    const supabase = await createClient();
-
-    const { error } = await supabase
-      .from('salon_applications')
-      .update({ status: 'rejected' })
-      .eq('id', applicationId);
-
-    if (error) throw error;
+    const appRef = doc(db, 'salon_applications', applicationId);
+    await updateDoc(appRef, { status: 'rejected' });
 
     revalidatePath('/admin');
     return { success: true };

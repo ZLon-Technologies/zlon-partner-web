@@ -3,11 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/utils/supabase/client';
 import { CheckCircle2, Loader2, ArrowRight, ArrowLeft, ShieldCheck, Check, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { auth } from '@/lib/firebase';
+import { db, auth, storage } from '@/lib/firebase';
 import { RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from 'firebase/auth';
+import { collection, addDoc, doc, updateDoc, setDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import Autocomplete from "react-google-autocomplete";
 
 const CATEGORIES = ['Hair Salon', 'Barbershop', 'Nail Studio', 'Med Spa'];
@@ -68,8 +69,6 @@ export default function MultiStepRegistration() {
   });
 
   const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
-
-  const supabase = createClient();
 
   const handleSendOtp = async () => {
     if (!formData.firstName.trim() || !formData.lastName.trim() || formData.mobile.length < 10) {
@@ -142,23 +141,16 @@ export default function MultiStepRegistration() {
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `${generateUniqueId()}.${fileExt}`;
-      const filePath = `${fileName}`;
+      const storageRef = ref(storage, `verification-docs/${fileName}`);
 
-      const { data, error: uploadError } = await supabase.storage
-        .from('verification-docs')
-        .upload(filePath, file);
-
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('verification-docs')
-        .getPublicUrl(filePath);
+      await uploadBytes(storageRef, file);
+      const publicUrl = await getDownloadURL(storageRef);
 
       setFormData(prev => ({ ...prev, document_url: publicUrl }));
       setToast({ message: "Verification document uploaded!", type: 'success' });
     } catch (err: any) {
       console.error(err);
-      setError("Failed to upload document. Please ensure the bucket 'verification-docs' exists and is public.");
+      setError("Failed to upload document. Please ensure Firebase Storage is configured correctly.");
     } finally {
       setLoading(false);
     }
@@ -210,40 +202,35 @@ export default function MultiStepRegistration() {
     setError(null);
     
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = auth.currentUser;
 
       // Create Salon
-      const { data: salonData, error: salonError } = await supabase
-        .from('salons')
-        .insert({
-          name: formData.salonName,
-          owner_name: `${formData.firstName} ${formData.lastName}`,
-          phone: formData.mobile,
-          address: formData.manualAddress,
-          latitude: formData.lat,
-          longitude: formData.lng,
-          document_url: formData.document_url,
-          kyc_number: formData.kycNumber,
-          status: 'pending',
-          owner_id: user?.id || null
-        })
-        .select()
-        .single();
-
-      if (salonError) throw salonError;
+      const salonRef = await addDoc(collection(db, 'salons'), {
+        name: formData.salonName,
+        owner_name: `${formData.firstName} ${formData.lastName}`,
+        phone: formData.mobile,
+        address: formData.manualAddress,
+        latitude: formData.lat,
+        longitude: formData.lng,
+        document_url: formData.document_url,
+        kyc_number: formData.kycNumber,
+        status: 'pending',
+        owner_id: user?.uid || null,
+        created_at: new Date().toISOString()
+      });
 
       // Create Services
-      const activeServices = formData.services.filter(s => s.selected).map(s => ({
-        salon_id: salonData.id,
-        name: s.name,
-        category: formData.category,
-        price: s.price,
-        duration_minutes: s.duration
-      }));
+      const activeServices = formData.services.filter(s => s.selected);
 
-      if (activeServices.length > 0) {
-        const { error: servicesError } = await supabase.from('services').insert(activeServices);
-        if (servicesError) throw servicesError;
+      for (const s of activeServices) {
+        await addDoc(collection(db, 'services'), {
+          salon_id: salonRef.id,
+          name: s.name,
+          category: formData.category,
+          price: s.price,
+          duration_minutes: s.duration,
+          created_at: new Date().toISOString()
+        });
       }
 
       setToast({ message: 'Salon launched successfully! Redirecting...', type: 'success' });

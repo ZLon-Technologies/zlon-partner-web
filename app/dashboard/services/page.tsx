@@ -2,22 +2,24 @@
 
 import React, { useState, useEffect } from 'react';
 import { Scissors, Plus, X, Loader2, CheckCircle2 } from 'lucide-react';
-import { createClient } from '@/utils/supabase/client';
+import { db, auth } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
+import { collection, query, where, getDocs, addDoc, serverTimestamp, orderBy } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
 
 interface Service {
-  id: string | number;
+  id: string;
   name: string;
   category: string;
   price: number;
   duration_minutes: number;
-  salon_id: number;
+  salon_id: string;
 }
 
 export default function ServicesPage() {
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
-  const [salonId, setSalonId] = useState<number | null>(null);
+  const [salonId, setSalonId] = useState<string | null>(null);
   
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -32,43 +34,50 @@ export default function ServicesPage() {
     duration_minutes: '',
   });
 
-  const supabase = createClient();
   const router = useRouter();
 
-  const fetchServices = async () => {
+  const fetchServices = async (user: any) => {
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (user) {
-      // Get the salon_id for this user
-      const { data: salonData, error: salonError } = await supabase
-        .from('salons')
-        .select('id')
-        .eq('owner_id', user.id)
-        .single();
+    try {
+      const salonsQuery = query(collection(db, 'salons'), where('owner_id', '==', user.uid));
+      const salonsSnapshot = await getDocs(salonsQuery);
 
-      if (salonData && !salonError) {
-        setSalonId(salonData.id);
+      if (!salonsSnapshot.empty) {
+        const salonDoc = salonsSnapshot.docs[0];
+        const currentSalonId = salonDoc.id;
+        setSalonId(currentSalonId);
         
-        // Fetch services for this salon
-        const { data: servicesData } = await supabase
-          .from('services')
-          .select('*')
-          .eq('salon_id', salonData.id)
-          .order('category', { ascending: true })
-          .order('name', { ascending: true });
-          
-        if (servicesData) {
-          setServices(servicesData);
-        }
+        const servicesQuery = query(
+          collection(db, 'services'), 
+          where('salon_id', '==', currentSalonId)
+        );
+        const servicesSnapshot = await getDocs(servicesQuery);
+        
+        const servicesData = servicesSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as Service));
+
+        // Client-side sorting as Firestore might not support multiple orderBys without composite index
+        servicesData.sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
+        setServices(servicesData);
       }
+    } catch (err) {
+      console.error("Error fetching services:", err);
     }
     setLoading(false);
   };
 
   useEffect(() => {
-    fetchServices();
-  }, [supabase]);
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        fetchServices(user);
+      } else {
+        router.push('/login');
+      }
+    });
+    return () => unsubscribe();
+  }, [router]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -81,33 +90,33 @@ export default function ServicesPage() {
     setIsSaving(true);
     setMessage(null);
 
-    const { data, error } = await supabase
-      .from('services')
-      .insert({
+    try {
+      const serviceData = {
         salon_id: salonId,
         name: formData.name,
         category: formData.category,
         price: parseFloat(formData.price),
         duration_minutes: parseInt(formData.duration_minutes, 10),
-      })
-      .select()
-      .single();
+        created_at: serverTimestamp()
+      };
 
-    if (error) {
-      setMessage({ type: 'error', text: error.message });
-      setIsSaving(false);
-    } else {
-      setMessage({ type: 'success', text: 'Service added successfully!' });
-      setServices(prev => [...prev, data].sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name)));
+      const docRef = await addDoc(collection(db, 'services'), serviceData);
       
-      // Reset form and close after a brief delay to show success
+      const newService = { id: docRef.id, ...serviceData } as Service;
+      
+      setMessage({ type: 'success', text: 'Service added successfully!' });
+      setServices(prev => [...prev, newService].sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name)));
+      
       setFormData({ name: '', category: '', price: '', duration_minutes: '' });
       setTimeout(() => {
         setIsModalOpen(false);
         setMessage(null);
         setIsSaving(false);
-        router.refresh();
       }, 1500);
+    } catch (error: any) {
+      console.error("Error adding service:", error);
+      setMessage({ type: 'error', text: error.message });
+      setIsSaving(false);
     }
   };
 

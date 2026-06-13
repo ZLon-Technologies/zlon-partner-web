@@ -2,14 +2,19 @@
 
 import "../globals.css";
 
-import { useState, type FormEvent, Suspense } from 'react';
+import { useState, type FormEvent, Suspense, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Loader2, Lock } from 'lucide-react';
+import { Loader2, ChevronDown } from 'lucide-react';
 
-import { createClient } from '@/utils/supabase/client';
+import { auth, db } from '@/lib/firebase';
+import { RecaptchaVerifier, signInWithPhoneNumber, type ConfirmationResult, signOut } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
 
-type AuthMode = 'password' | 'otp';
-type LoadingState = 'sign-in' | 'request' | 'verify' | 'reset' | null;
+const COUNTRY_CODES = [
+  { code: '+91', name: 'IN' },
+  { code: '+1', name: 'US' },
+  { code: '+44', name: 'UK' },
+];
 
 const fieldClassName =
   'w-full px-4 py-3.5 bg-[#F9F9F9] border border-gray-200 rounded-xl text-sm text-neutral-950 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-neutral-950 focus:bg-white transition-all';
@@ -17,152 +22,142 @@ const fieldClassName =
 const primaryButtonClassName =
   'w-full bg-neutral-950 text-white font-medium text-sm py-3.5 rounded-full hover:opacity-90 active:scale-[0.98] transition-all duration-200 mt-6 shadow-sm disabled:cursor-not-allowed disabled:opacity-70';
 
+function OtpInput({ value, onChange }: { value: string; onChange: (val: string) => void }) {
+  const inputs = useRef<(HTMLInputElement | null)[]>([]);
+
+  const handleInput = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
+    const val = e.target.value;
+    if (!/^\d*$/.test(val)) return;
+
+    const newOtp = value.split('');
+    newOtp[index] = val.slice(-1);
+    const combined = newOtp.join('');
+    onChange(combined);
+
+    if (val && index < 5) {
+      inputs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number) => {
+    if (e.key === 'Backspace' && !value[index] && index > 0) {
+      inputs.current[index - 1]?.focus();
+    }
+  };
+
+  useEffect(() => {
+    inputs.current[0]?.focus();
+  }, []);
+
+  return (
+    <div className="flex justify-between gap-2 mb-6">
+      {[0, 1, 2, 3, 4, 5].map((index) => (
+        <input
+          key={index}
+          ref={(el) => { inputs.current[index] = el; }}
+          type="text"
+          inputMode="numeric"
+          maxLength={1}
+          value={value[index] || ''}
+          onChange={(e) => handleInput(e, index)}
+          onKeyDown={(e) => handleKeyDown(e, index)}
+          className="w-12 h-14 text-center text-xl font-bold text-black bg-gray-100 rounded-xl border-2 border-transparent focus:border-black focus:bg-white transition-all outline-none"
+        />
+      ))}
+    </div>
+  );
+}
+
 function LoginContent() {
-  const [authMode, setAuthMode] = useState<AuthMode>('password');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [otp, setOtp] = useState('');
-  const [otpRequested, setOtpRequested] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [countryCode, setCountryCode] = useState('+91');
+  const [otpCode, setOtpCode] = useState('');
+  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [loading, setLoading] = useState<LoadingState>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const supabase = createClient();
 
-  const authError = searchParams.get('error');
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !window.recaptchaVerifier) {
+      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        size: 'invisible',
+      });
+    }
+    return () => {
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear();
+        window.recaptchaVerifier = undefined;
+      }
+    };
+  }, []);
 
-  function clearFeedback() {
+  async function handleSendOTP(e: FormEvent) {
+    e.preventDefault();
+    if (phoneNumber.length < 10) {
+      setError('Please enter a valid phone number');
+      return;
+    }
+
+    setIsLoading(true);
     setError(null);
-    setNotice(null);
+
+    try {
+      const fullPhone = `${countryCode}${phoneNumber}`;
+      const appVerifier = window.recaptchaVerifier;
+      if (!appVerifier) throw new Error('Recaptcha not initialized');
+      
+      const result = await signInWithPhoneNumber(auth, fullPhone, appVerifier);
+      setConfirmationResult(result);
+    } catch (err: any) {
+      console.error('Send OTP Error:', err);
+      setError(err.message || 'Failed to send verification code');
+    } finally {
+      setIsLoading(false);
+    }
   }
 
-  function switchToPasswordMode() {
-    setAuthMode('password');
-    setOtp('');
-    setOtpRequested(false);
-    clearFeedback();
-  }
-
-  function switchToOtpMode() {
-    setAuthMode('otp');
-    setPassword('');
-    setOtp('');
-    setOtpRequested(false);
-    clearFeedback();
-  }
-
-  async function handlePasswordSignIn(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setLoading('sign-in');
-    clearFeedback();
-
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (signInError) {
-      setError(signInError.message);
-      setLoading(null);
+  async function handleVerifyOTP(e: FormEvent) {
+    e.preventDefault();
+    if (otpCode.length !== 6) {
+      setError('Please enter the 6-digit code');
       return;
     }
 
-    router.push('/dashboard');
-    router.refresh();
-  }
+    setIsLoading(true);
+    setError(null);
 
-  async function handleForgotPassword() {
-    clearFeedback();
+    try {
+      if (!confirmationResult) throw new Error('Session expired');
+      
+      const result = await confirmationResult.confirm(otpCode);
+      const user = result.user;
 
-    if (!email) {
-      setError('Enter your email address first, then use Forgot? to request a reset link.');
-      return;
-    }
+      // MANDATORY CHECK: Verify if the user exists in the 'partners' collection
+      const partnerRef = doc(db, 'partners', user.uid);
+      const partnerSnap = await getDoc(partnerRef);
 
-    setLoading('reset');
-
-    const redirectTo =
-      typeof window !== 'undefined' ? `${window.location.origin}/login` : undefined;
-
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(
-      email,
-      redirectTo ? { redirectTo } : undefined
-    );
-
-    if (resetError) {
-      setError(resetError.message);
-    } else {
-      setNotice('If this account exists, a password reset link has been sent to your email.');
-    }
-
-    setLoading(null);
-  }
-
-  async function handleRequestOtp(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setLoading('request');
-    clearFeedback();
-
-    const { error: otpError } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        shouldCreateUser: false,
-      },
-    });
-
-    if (otpError) {
-      setError(otpError.message);
-      setLoading(null);
-      return;
-    }
-
-    setOtp('');
-    setOtpRequested(true);
-    setNotice(`We sent a 6-digit code to ${email}.`);
-    setLoading(null);
-  }
-
-  async function handleVerifyOtp(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setLoading('verify');
-    clearFeedback();
-
-    const { data: authData, error: verifyError } = await supabase.auth.verifyOtp({
-      email,
-      token: otp,
-      type: 'email',
-    });
-
-    if (verifyError) {
-      setError(verifyError.message);
-      setLoading(null);
-      return;
-    }
-
-    if (authData.user) {
-      const { data: salonData, error: salonError } = await supabase
-        .from('salons')
-        .select('id')
-        .eq('owner_id', authData.user.id)
-        .single();
-
-      if (salonError || !salonData) {
-        await supabase.auth.signOut();
+      if (!partnerSnap.exists()) {
+        await signOut(auth);
         setError('Access Denied. This portal is strictly for registered ZLon Salon Partners.');
-        setLoading(null);
+        setConfirmationResult(null);
+        setOtpCode('');
         return;
       }
+
+      router.push('/dashboard');
+    } catch (err: any) {
+      console.error('Verify OTP Error:', err);
+      setError('Invalid verification code. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
-
-    router.push('/dashboard');
-    router.refresh();
   }
-
-  const isBusy = loading !== null;
 
   return (
     <div className="bg-white px-8 py-10 rounded-[2rem] border border-gray-100 shadow-sm max-w-[420px] w-full flex flex-col items-center text-center relative">
+      <div id="recaptcha-container" />
+      
       <div className="mb-8 flex justify-center w-full">
         <img src="/zlon-partner-logo.png" alt="ZLon Partner Logo" className="h-10 w-auto object-contain" />
       </div>
@@ -174,178 +169,71 @@ function LoginContent() {
         Secure access to your salon dashboard.
       </p>
 
-      {authError === 'unauthorized_role' && (
-        <div className="w-full p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-xs font-bold text-center mb-6 uppercase tracking-wider">
-          Access Denied. This portal is strictly for registered ZLon Salon Partners.
-        </div>
-      )}
-
-      {authMode === 'password' ? (
-        <form onSubmit={handlePasswordSignIn} className="w-full flex flex-col gap-4 text-left">
-          <div>
-            <label
-              htmlFor="email"
-              className="text-[11px] font-bold tracking-widest text-gray-500 mb-1 block"
-            >
-              EMAIL ADDRESS
-            </label>
-            <input
-              id="email"
-              type="email"
-              required
-              autoComplete="username"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="name@salon.com"
-              className={fieldClassName}
-            />
-          </div>
-
-          <div>
-            <div className="flex justify-between items-center w-full mb-1">
-              <label
-                htmlFor="password"
-                className="text-[11px] font-bold tracking-widest text-gray-500 block"
+      {!confirmationResult ? (
+        <form onSubmit={handleSendOTP} className="w-full flex flex-col text-left">
+          <label className="text-[11px] font-bold tracking-widest text-gray-500 mb-1 block">
+            PHONE NUMBER
+          </label>
+          <div className="flex gap-2 mb-4">
+            <div className="relative">
+              <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                <ChevronDown size={14} className="text-gray-400" />
+              </div>
+              <select
+                value={countryCode}
+                onChange={(e) => setCountryCode(e.target.value)}
+                className="appearance-none bg-[#F9F9F9] border border-gray-200 rounded-xl px-4 py-3.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-neutral-950 pr-8"
               >
-                PASSWORD
-              </label>
-              <button
-                type="button"
-                onClick={handleForgotPassword}
-                disabled={isBusy}
-                className="text-[11px] font-semibold text-neutral-950 hover:underline cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Forgot?
-              </button>
+                {COUNTRY_CODES.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
+              </select>
             </div>
             <input
-              id="password"
-              type="password"
-              required
-              autoComplete="current-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="Enter your password"
+              type="tel"
+              placeholder="9876543210"
+              value={phoneNumber}
+              onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
               className={fieldClassName}
+              required
             />
           </div>
 
-          {(error || notice) && (
-            <p className={`text-sm text-center ${error ? 'text-red-500' : 'text-gray-500'}`}>
-              {error ?? notice}
-            </p>
-          )}
+          {error && <p className="text-sm text-red-500 text-center">{error}</p>}
 
-          <button type="submit" disabled={isBusy} className={primaryButtonClassName}>
-            {loading === 'sign-in' ? (
-              <span className="flex items-center justify-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Signing In
-              </span>
-            ) : (
-              'Sign In'
-            )}
-          </button>
-
-          <button
-            type="button"
-            onClick={switchToOtpMode}
-            disabled={isBusy}
-            className="text-sm font-medium text-neutral-950 hover:underline mt-4 transition-all disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            Login with one-time code (OTP)
+          <button type="submit" disabled={isLoading} className={primaryButtonClassName}>
+            {isLoading ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : 'Send Login Code'}
           </button>
         </form>
       ) : (
-        <form
-          onSubmit={otpRequested ? handleVerifyOtp : handleRequestOtp}
-          className="w-full flex flex-col gap-4 text-left"
-        >
-          <div>
-            <label
-              htmlFor="otp-email"
-              className="text-[11px] font-bold tracking-widest text-gray-500 mb-1 block"
-            >
-              EMAIL ADDRESS
-            </label>
-            <input
-              id="otp-email"
-              type="email"
-              required
-              autoComplete="username"
-              value={email}
-              onChange={(event) => {
-                setEmail(event.target.value);
-                if (otpRequested) {
-                  setOtpRequested(false);
-                  setOtp('');
-                  clearFeedback();
-                }
-              }}
-              placeholder="name@salon.com"
-              className={fieldClassName}
-            />
-          </div>
+        <form onSubmit={handleVerifyOTP} className="w-full flex flex-col text-left">
+          <p className="text-center text-sm text-gray-500 mb-6 font-medium">
+            Enter the code sent to <span className="text-black font-bold">{countryCode} {phoneNumber}</span>
+          </p>
+          
+          <OtpInput value={otpCode} onChange={setOtpCode} />
 
-          {otpRequested && (
-            <div>
-              <label
-                htmlFor="otp"
-                className="text-[11px] font-bold tracking-widest text-gray-500 mb-1 block"
-              >
-                ONE-TIME CODE
-              </label>
-              <input
-                id="otp"
-                type="text"
-                required
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                maxLength={6}
-                value={otp}
-                onChange={(event) => setOtp(event.target.value.replace(/\D/g, ''))}
-                placeholder="Enter 6-digit code"
-                className={fieldClassName}
-              />
-            </div>
-          )}
+          {error && <p className="text-sm text-red-500 text-center mb-4">{error}</p>}
 
-          {(error || notice) && (
-            <p className={`text-sm text-center ${error ? 'text-red-500' : 'text-gray-500'}`}>
-              {error ?? notice}
-            </p>
-          )}
-
-          <button type="submit" disabled={isBusy} className={primaryButtonClassName}>
-            {loading === 'request' ? (
-              <span className="flex items-center justify-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Sending Login Code
-              </span>
-            ) : loading === 'verify' ? (
-              <span className="flex items-center justify-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Verifying Code
-              </span>
-            ) : otpRequested ? (
-              'Verify Login Code'
-            ) : (
-              'Send Login Code'
-            )}
+          <button type="submit" disabled={isLoading} className={primaryButtonClassName}>
+            {isLoading ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : 'Verify & Sign In'}
           </button>
 
           <button
             type="button"
-            onClick={switchToPasswordMode}
-            disabled={isBusy}
-            className="text-sm font-medium text-neutral-950 hover:underline mt-4 transition-all disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={() => setConfirmationResult(null)}
+            className="text-sm font-medium text-neutral-950 hover:underline mt-4 text-center"
           >
-            Use email and password instead
+            Change phone number
           </button>
         </form>
       )}
     </div>
   );
+}
+
+declare global {
+  interface Window {
+    recaptchaVerifier: RecaptchaVerifier | undefined;
+  }
 }
 
 export default function LoginPage() {

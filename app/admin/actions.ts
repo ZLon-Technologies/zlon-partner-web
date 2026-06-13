@@ -1,20 +1,18 @@
-import { createClient } from '@/utils/supabase/server';
+import { db } from '@/lib/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
 import { revalidatePath } from 'next/cache';
 
 export async function approveSalon(formData: FormData) {
   const salonId = formData.get('salonId') as string;
-  const supabase = await createClient();
 
-  const { error } = await supabase
-    .from('salons')
-    .update({ status: 'active' })
-    .eq('id', salonId);
+  try {
+    const salonRef = doc(db, 'salons', salonId);
+    await updateDoc(salonRef, { status: 'active' });
 
-  if (error) {
+    revalidatePath('/admin');
+    return { success: true };
+  } catch (error) {
     console.error('Error approving salon:', error);
     return { error: 'Failed to approve salon' };
   }
-
-  revalidatePath('/admin');
-  return { success: true };
 }

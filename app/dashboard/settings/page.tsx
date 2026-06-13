@@ -2,14 +2,17 @@
 
 import React, { useState, useEffect } from 'react';
 import { Settings, User, Clock, Bell, Loader2, CheckCircle2 } from 'lucide-react';
-import { createClient } from '@/utils/supabase/client';
+import { db, auth } from '@/lib/firebase';
+import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
+import { useRouter } from 'next/navigation';
 
 export default function SettingsPage() {
-  const supabase = createClient();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [salonId, setSalonId] = useState<number | null>(null);
+  const [salonId, setSalonId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const router = useRouter();
 
   const [salonData, setSalonData] = useState({
     name: '',
@@ -22,35 +25,36 @@ export default function SettingsPage() {
   });
 
   useEffect(() => {
-    async function fetchSalonData() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          const q = query(collection(db, 'salons'), where('owner_id', '==', user.uid));
+          const querySnapshot = await getDocs(q);
+
+          if (!querySnapshot.empty) {
+            const salonDoc = querySnapshot.docs[0];
+            const data = salonDoc.data();
+            setSalonId(salonDoc.id);
+            setSalonData({
+              name: data.name || '',
+              email: data.email || '',
+              phone: data.phone || '',
+              address: data.address || '',
+              city: data.city || '',
+              state: data.state || '',
+              pincode: data.pincode || '',
+            });
+          }
+        } catch (err) {
+          console.error("Error fetching salon data:", err);
+        }
         setLoading(false);
-        return;
+      } else {
+        router.push('/login');
       }
-
-      const { data, error } = await supabase
-        .from('salons')
-        .select('*')
-        .eq('owner_id', user.id)
-        .single();
-
-      if (data) {
-        setSalonId(data.id);
-        setSalonData({
-          name: data.name || '',
-          email: data.email || '',
-          phone: data.phone || '',
-          address: data.address || '',
-          city: data.city || '',
-          state: data.state || '',
-          pincode: data.pincode || '',
-        });
-      }
-      setLoading(false);
-    }
-    fetchSalonData();
-  }, [supabase]);
+    });
+    return () => unsubscribe();
+  }, [router]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSalonData(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -61,9 +65,9 @@ export default function SettingsPage() {
     setSaving(true);
     setMessage(null);
 
-    const { error } = await supabase
-      .from('salons')
-      .update({
+    try {
+      const salonRef = doc(db, 'salons', salonId);
+      await updateDoc(salonRef, {
         name: salonData.name,
         email: salonData.email,
         phone: salonData.phone,
@@ -71,14 +75,13 @@ export default function SettingsPage() {
         city: salonData.city,
         state: salonData.state,
         pincode: salonData.pincode,
-      })
-      .eq('id', salonId);
+      });
 
-    if (error) {
-      setMessage({ type: 'error', text: error.message });
-    } else {
       setMessage({ type: 'success', text: 'Salon profile updated successfully.' });
       setTimeout(() => setMessage(null), 3000);
+    } catch (error: any) {
+      console.error("Error updating salon profile:", error);
+      setMessage({ type: 'error', text: error.message });
     }
     setSaving(false);
   };

@@ -2,21 +2,21 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/utils/supabase/client';
+import { auth } from '@/lib/firebase';
+import { signOut } from 'firebase/auth';
 import { Loader2 } from 'lucide-react';
 
 export default function LogoutPage() {
   const router = useRouter();
-  const supabase = createClient();
 
   useEffect(() => {
     async function logout() {
-      await supabase.auth.signOut();
+      await signOut(auth);
       router.push('/login');
       router.refresh();
     }
     logout();
-  }, [router, supabase]);
+  }, [router]);
 
   return (
     <div className="min-h-screen w-screen flex flex-col items-center justify-center bg-gray-50">

@@ -1,28 +1,87 @@
-import { createClient } from '@/utils/supabase/server';
-import { redirect } from 'next/navigation';
-import { CheckCircle2, ShieldCheck, MapPin, FileText, User, Phone } from 'lucide-react';
-import { approveSalon } from './actions';
+'use client';
 
-// This would typically be in an environment variable
-const ADMIN_EMAIL = 'admin@zlon.in'; 
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { CheckCircle2, ShieldCheck, MapPin, FileText, User, Phone, Loader2 } from 'lucide-react';
+import { db, auth } from '@/lib/firebase';
+import { collection, query, where, getDocs, orderBy, doc, updateDoc, setDoc } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
 
-export default async function AdminPage() {
-  const supabase = await createClient();
+const ADMIN_EMAIL = 'admin@zlon.in';
 
-  const { data: { user } } = await supabase.auth.getUser();
+export default function AdminPage() {
+  const [user, setUser] = useState<any>(null);
+  const [pendingSalons, setPendingSalons] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isProcessing, setIsProcessing] = useState<string | null>(null);
+  const router = useRouter();
 
-  if (!user || user.email !== ADMIN_EMAIL) {
-    redirect('/');
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      if (u) {
+        if (u.email === ADMIN_EMAIL) {
+          setUser(u);
+          fetchPendingSalons();
+        } else {
+          router.push('/');
+        }
+      } else {
+        router.push('/login');
+      }
+    });
+    return () => unsubscribe();
+  }, [router]);
+
+  async function fetchPendingSalons() {
+    try {
+      const q = query(
+        collection(db, 'salons'),
+        where('status', '==', 'pending'),
+        orderBy('created_at', 'desc')
+      );
+      const snap = await getDocs(q);
+      setPendingSalons(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    } catch (error) {
+      console.error('Error fetching salons:', error);
+    } finally {
+      setIsLoading(false);
+    }
   }
 
-  const { data: pendingSalons, error } = await supabase
-    .from('salons')
-    .select('*')
-    .eq('status', 'pending')
-    .order('created_at', { ascending: false });
+  async function handleApprove(salonId: string, ownerId: string) {
+    setIsProcessing(salonId);
+    try {
+      // 1. Update salon status
+      await updateDoc(doc(db, 'salons', salonId), {
+        status: 'approved',
+        updated_at: new Date().toISOString(),
+      });
 
-  if (error) {
-    console.error('Error fetching salons:', error);
+      // 2. Ensure owner is in 'partners' collection
+      // (This is crucial for the login check we implemented)
+      await setDoc(doc(db, 'partners', ownerId), {
+        id: ownerId,
+        salon_id: salonId,
+        role: 'partner',
+        status: 'active',
+        created_at: new Date().toISOString(),
+      }, { merge: true });
+
+      // Refresh list
+      setPendingSalons(prev => prev.filter(s => s.id !== salonId));
+    } catch (error) {
+      console.error('Error approving salon:', error);
+    } finally {
+      setIsProcessing(null);
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loader2 className="animate-spin h-8 w-8 text-neutral-900" />
+      </div>
+    );
   }
 
   return (
@@ -38,11 +97,11 @@ export default async function AdminPage() {
           </div>
           <div className="bg-white px-4 py-2 rounded-xl border border-gray-200 flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-            <span className="text-sm font-bold text-neutral-700">{pendingSalons?.length || 0} Pending Requests</span>
+            <span className="text-sm font-bold text-neutral-700">{pendingSalons.length} Pending Requests</span>
           </div>
         </header>
 
-        {!pendingSalons || pendingSalons.length === 0 ? (
+        {pendingSalons.length === 0 ? (
           <div className="bg-white rounded-[2rem] border border-gray-100 p-20 text-center shadow-sm">
             <div className="bg-gray-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
               <CheckCircle2 className="text-gray-300" size={40} />
@@ -70,7 +129,7 @@ export default async function AdminPage() {
                         </a>
                       </div>
                       <div className="flex-1 overflow-hidden">
-                        {salon.document_url.endsWith('.pdf') ? (
+                        {salon.document_url.toLowerCase().includes('.pdf') ? (
                           <div className="h-full flex items-center justify-center p-8 text-center">
                             <div className="space-y-3">
                               <FileText size={48} className="mx-auto text-gray-300" />
@@ -108,16 +167,18 @@ export default async function AdminPage() {
                       </div>
                     </div>
                     
-                    <form action={async (formData) => { await approveSalon(formData); }}>
-                      <input type="hidden" name="salonId" value={salon.id} />
-                      <button 
-                        type="submit"
-                        className="bg-neutral-950 text-white px-8 py-3 rounded-xl font-bold text-sm shadow-lg shadow-black/10 hover:bg-neutral-800 transition-all active:scale-[0.98] flex items-center gap-2"
-                      >
+                    <button 
+                      onClick={() => handleApprove(salon.id, salon.owner_id)}
+                      disabled={isProcessing === salon.id}
+                      className="bg-neutral-950 text-white px-8 py-3 rounded-xl font-bold text-sm shadow-lg shadow-black/10 hover:bg-neutral-800 transition-all active:scale-[0.98] flex items-center gap-2"
+                    >
+                      {isProcessing === salon.id ? (
+                        <Loader2 className="animate-spin h-4 w-4" />
+                      ) : (
                         <CheckCircle2 size={18} />
-                        Approve Partner
-                      </button>
-                    </form>
+                      )}
+                      Approve Partner
+                    </button>
                   </div>
 
                   <div className="grid grid-cols-2 gap-8 mt-auto">
@@ -159,11 +220,6 @@ export default async function AdminPage() {
                         <div>
                           <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Location</p>
                           <p className="text-sm font-bold text-neutral-900 line-clamp-2 leading-snug">{salon.address}</p>
-                          {salon.latitude && (
-                            <p className="text-[10px] text-gray-400 mt-1">
-                              GPS: {salon.latitude.toFixed(4)}, {salon.longitude.toFixed(4)}
-                            </p>
-                          )}
                         </div>
                       </div>
                     </div>
